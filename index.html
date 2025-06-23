@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+
+    <!-- Google tag (gtag.js) -->
+    <!-- Google tag (gtag.js) -->
+    <!-- Google tag (gtag.js) -->
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-KTP0F99KQP"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+
+        function gtag() {
+            dataLayer.push(arguments);
+        }
+
+        gtag('js', new Date());
+
+        gtag('config', 'G-KTP0F99KQP');
+    </script>
+
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['\\(', '\\)']],
+                macros: {
+                    State: '{\\mathbf{s}}',
+                    Point: '{\\mathrm{\\mathbf{p}}}',
+                    ippn: '{\\text{IPPN}}'
+                }
+            }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+
+    <meta charset="utf-8">
+    <meta name="description"
+          content="Neural Cellular Automata: From Cells to Pixels">
+    <meta name="keywords"
+          content="NCA, Neural Implicit Representation, NIR, Texture Synthesis, Neural Cellular Automata, Turing Patterns, Reaction Diffusion,
+          GrowingNCA, Morphogenesis, PBR Textures, Super Resolution, Compositional Patterns Producing Networks, CPPN">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Neural Cellular Automata: From Cells to Pixels</title>
+
+
+    <link rel="stylesheet" href="https://cdn.knightlab.com/libs/juxtapose/latest/css/juxtapose.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+    <script src="https://cdn.knightlab.com/libs/juxtapose/latest/js/juxtapose.min.js"></script>
+    <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro"
+          rel="stylesheet">
+
+    <link rel="stylesheet" href="./static/css/bulma.min.css">
+    <link rel="stylesheet" href="./static/css/bulma-carousel.min.css">
+    <link rel="stylesheet" href="./static/css/bulma-slider.min.css">
+    <link rel="stylesheet" href="./static/css/fontawesome.all.min.css">
+
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+    <link rel="stylesheet" href="./static/css/index.css">
+    <link rel="icon" href="./static/images/favicon.png">
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script defer src="./static/js/fontawesome.all.min.js"></script>
+
+    <!--    <script src="./static/js/bulma-carousel.min.js"></script>-->
+    <!--    <script src="./static/js/bulma-slider.min.js"></script>-->
+    <script src="./static/js/index.js"></script>
+
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://distill.pub/template.v2.js"></script>
+    <link rel="stylesheet" href="style.css">
+    <script src="twgl.min.js"></script>
+    <script type="module" src="noiseNCA.js"></script>
+    <script type="module" src="./demo.js"></script>
+
+
+</head>
+
+<svg style="display: none;" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="playIcon" viewBox="0 0 24 24">
+        <path d="M8 5v14l11-7z"></path>
+        <path d="M0 0h24v24H0z" fill="none"></path>
+    </symbol>
+    <symbol id="pauseIcon" viewBox="0 0 24 24">
+        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"></path>
+        <path d="M0 0h24v24H0z" fill="none"></path>
+    </symbol>
+    <symbol id="resetIcon" viewBox="0 0 24 24">
+        <path d="M0 0h24v24H0z" fill="none"></path>
+        <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"></path>
+    </symbol>
+    <symbol id="zoomInIcon" viewBox="0 0 24 24">
+        <path d="M0 0h24v24H0V0z" fill="none"/>
+        <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+        <path d="M12 10h-2v2H9v-2H7V9h2V7h1v2h2v1z"/>
+    </symbol>
+    <symbol id="zoomOutIcon" viewBox="0 0 24 24">
+        <path d="M0 0h24v24H0V0z" fill="none"/>
+        <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14zM7 9h5v1H7z"/>
+    </symbol>
+    <symbol id="mouse" viewBox="0 0 100 100">
+        <path d="M32,41v18c0,9.9,8.1,18,18,18c9.9,0,18-8.1,18-18V41c0-9.9-8.1-18-18-18C40.1,23,32,31.1,32,41z M50,27c7.7,0,14,6.3,14,14  v18c0,7.7-6.3,14-14,14s-14-6.3-14-14V41C36,33.3,42.3,27,50,27z"></path>
+        <path d="M50,44c1.1,0,2-0.9,2-2v-6c0-1.1-0.9-2-2-2s-2,0.9-2,2v6C48,43.1,48.9,44,50,44z"></path>
+        <path d="M48.6,92.4C49,92.8,49.5,93,50,93s1-0.2,1.4-0.6l5-5c0.8-0.8,0.8-2,0-2.8s-2-0.8-2.8,0L50,88.2l-3.6-3.6  c-0.8-0.8-2-0.8-2.8,0c-0.8,0.8-0.8,2,0,2.8L48.6,92.4z"></path>
+        <path d="M48.6,7.6l-5,5c-0.8,0.8-0.8,2,0,2.8C44,15.8,44.5,16,45,16s1-0.2,1.4-0.6l3.6-3.6l3.6,3.6C54,15.8,54.5,16,55,16  s1-0.2,1.4-0.6c0.8-0.8,0.8-2,0-2.8l-5-5C50.6,6.8,49.4,6.8,48.6,7.6z"></path>
+    </symbol>
+</svg>
+
+
+<body>
+
+
+<section class="hero">
+    <div class="hero-body">
+        <div class="container is-max-desktop">
+            <div class="columns is-centered">
+                <div class="column has-text-centered">
+                    <h1 class="title is-2 publication-title">Neural Cellular Automata: From Cells to Pixels</h1>
+
+
+                    <div class="is-size-5 publication-authors">
+                                            <span class="author-block">
+                                                <a href="https://pajouheshgar.github.io">Ehsan Pajouheshgar</a>,</span>
+                        <span class="author-block">
+                                                <a href="https://xyt0098.github.io">Yitao Xu</a>,</span>
+                        <span class="author-block">
+                                                <a href="./">Ali Abbasi</a></span>
+                        <br>
+                        <span class="author-block">
+                                                <a href="https://znah.net">Alexander Mordvintsev</a></span>
+                        <span class="author-block">
+                                                <a href="https://rgl.epfl.ch/people/wjakob">Wenzel Jakob</a></span>
+                        <span class="author-block">
+                                                <a href="https://www.epfl.ch/labs/ivrl/">Sabine Süsstrunk</a></span>
+
+
+                    </div>
+                    <div class="is-size-6 publication-authors">
+                        <span class="author-block">Image and Visual Representation Lab (IVRL)</span>
+                    </div>
+
+                    <div class="is-size-6 publication-authors">
+                        <span class="author-block">École Polytechnique Fédérale de Lausanne (EPFL)</span>
+                    </div>
+
+                    <!--                    <div class="is-size-4 publication-authors">-->
+                    <!--                        <span class="author-block">Artificial Life 2024 (<b>Best Student Paper Award</b>)</span>-->
+                    <!--                    </div>-->
+
+
+                </div>
+
+
+            </div>
+
+
+        </div>
+    </div>
+    <div class="columns is-centered has-text-centered">
+                <span class="link-block">
+                                <a href="./"
+                                   class="external-link button is-normal is-rounded">
+                                  <span class="icon">
+                                      <i class="ai ai-arxiv"></i>
+                                  </span>
+                                  <span>arXiv (Coming Soon)</span>
+                                </a>
+                            </span>
+
+        <span class="link-block">
+                <a href="./" target="_blank"
+                   class="external-link button is-normal is-rounded">
+                <span class="icon">
+                  <svg class="svg-inline--fa fa-github fa-w-16" aria-hidden="true" focusable="false" data-prefix="fab"
+                       data-icon="github" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"
+                       data-fa-i2svg=""><path fill="currentColor"
+                                              d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"></path></svg>
+                    <!-- <i class="fab fa-github"></i> Font Awesome fontawesome.com -->
+                </span>
+                <span>GitHub (Coming Soon)</span>
+              </a>
+              </span>
+
+        <!--        <span class="link-block">-->
+        <!--              <a href="https://colab.research.google.com/github/IVRL/NoiseNCA/blob/main/colab.ipynb"-->
+        <!--                 target="_blank" class="external-link button is-normal is-rounded">-->
+        <!--                <span class="icon">-->
+        <!--                    <svg class="svg-inline&#45;&#45;fa fa-infinity fa-w-20" aria-hidden="true" focusable="false"-->
+        <!--                         data-prefix="fas" data-icon="infinity" role="img" xmlns="http://www.w3.org/2000/svg"-->
+        <!--                         viewBox="0 0 640 512" data-fa-i2svg=""><path fill="currentColor"-->
+        <!--                                                                      d="M471.1 96C405 96 353.3 137.3 320 174.6 286.7 137.3 235 96 168.9 96 75.8 96 0 167.8 0 256s75.8 160 168.9 160c66.1 0 117.8-41.3 151.1-78.6 33.3 37.3 85 78.6 151.1 78.6 93.1 0 168.9-71.8 168.9-160S564.2 96 471.1 96zM168.9 320c-40.2 0-72.9-28.7-72.9-64s32.7-64 72.9-64c38.2 0 73.4 36.1 94 64-20.4 27.6-55.9 64-94 64zm302.2 0c-38.2 0-73.4-36.1-94-64 20.4-27.6 55.9-64 94-64 40.2 0 72.9 28.7 72.9 64s-32.7 64-72.9 64z"></path></svg>-->
+        <!--                    &lt;!&ndash; <i class="fas fa-infinity"></i> Font Awesome fontawesome.com &ndash;&gt;-->
+        <!--                </span>-->
+        <!--                <span>Colab</span>-->
+        <!--              </a>-->
+        <!--             </span>-->
+
+
+        <!--        <span class="link-block">-->
+        <!--                                <a href="supplementary/"-->
+        <!--                                   class="external-link button is-normal is-rounded">-->
+        <!--                                  <span class="icon">-->
+        <!--                                <i class="fas fa-folder"></i>-->
+        <!--                                  </span>-->
+        <!--                                  <span>Supplementary</span>-->
+        <!--                                </a>-->
+        <!--                            </span>-->
+    </div>
+
+</section>
+
+
+<!-- <section class="section is-light">
+    <div class="container is-max-desktop">
+
+        <div class="is-centered has-text-centered">
+            <p style="font-size: 14pt">
+                In addition to the common interactive controls in NCA models such as <i>Cell Alignment</i> and <i>Rotation</i>,
+                and <i>Regeneration Brush</i>, <b>NoiseNCA</b> allows continuous control over the rate of pattern
+                formation and the scale of the synthesized pattern using the $\Delta t$ and $(\Delta x, \Delta y)$
+                sliders,
+                respectively.
+            </p>
+
+            <br>
+        </div>
+
+        <div class="l-body-outset grid" id="demo">
+            <div>
+                <canvas id="demo-canvas"></canvas>
+
+                <div class="demo-controls">
+                    <div class="tooltip">
+                        <span id="play-pause">
+
+              <svg class="demo-icon" id="play" style="display: none;"><use xlink:href="#playIcon"></use></svg>
+              <svg class="demo-icon" id="pause"><use xlink:href="#pauseIcon"></use></svg>
+            </span>
+                        <svg class="demo-icon" id="reset">
+                            <use xlink:href="#resetIcon"></use>
+                        </svg>
+                        <svg class="demo-icon" id="zoomIn">
+                            <use xlink:href="#zoomInIcon"></use>
+                        </svg>
+                        <svg class="demo-icon disabled" id="zoomOut">
+                            <use xlink:href="#zoomOutIcon"></use>
+                        </svg>
+
+                        <span id="record">
+                                <img id="record_off" src="images/record_off.png" width="40px" height="40px"
+                                     style="padding: 4px; padding-bottom: 2px"/>
+                                <img id="record_on" src="images/record_on.png" width="40px" height="40px"
+                                     style="padding: 4px; padding-bottom: 2px; display: none;"/>
+                        </span>
+
+                    </div>
+                    <div class="speed">
+                        <input type="range" id="speed" min="-4" max="4" step="1" value="0"></br>Steps / Frame:
+                        <label
+                                id="speedLabel"></label>
+
+                    </div>
+
+                    <div style="text-align: center; background: #eee;">
+                        <label class="toggler-wrapper style-19">
+
+                            <input type="checkbox" id="scaling_mode" checked="checked">
+                            <div class="toggler-slider">
+                                <div class="toggler-knob"></div>
+                            </div>
+
+
+                        </label>
+
+
+                    </div>
+
+
+                    <div>
+
+                        <input type="range" id="dx" min="-0.585" max="1.0" step="0.001" value="0.0"></br>$\Delta x
+                        = $
+                        <label
+                                id="dxLabel"></label>
+
+                        <input type="range" id="dy" min="-0.585" max="1.0" step="0.001" value="0.0"></br>$\Delta y
+                        = $
+                        <label
+                                id="dyLabel"></label>
+                    </div>
+
+
+                    <div id='brushSelect' class="button-group">
+                        <label>
+                            <input type="radio" name="brush"><img
+                                src="images/brush_S.png" width="38px" height="38px"/>
+                        </label>
+                        <label>
+                            <input type="radio" name="brush"><img src="images/brush_M.png" width="38px"
+                                                                  height="38px"/>
+                        </label>
+                        <label>
+                            <input type="radio" name="brush" checked="checked"><img
+                                src="images/brush_L.png" width="38px" height="38px"/>
+                        </label>
+                        <br> Brush Size
+
+                    </div>
+
+                    <div>
+                        <input type="range" id="dt" min="0.01" max="1.0" step="0.01" value="1.0"></br>$\Delta t =
+                        $
+                        <label
+                                id="dtLabel"></label><br>
+
+
+                    </div>
+
+
+                    <div id='alignSelect' class="button-group">
+                        <label>
+                            <input type="radio" checked="checked" name="align"><img
+                                src="images/icons.svg#alignRegular"/>
+                        </label>
+                        <label>
+                            <input type="radio" name="align"><img src="images/icons.svg#alignPolar"/>
+                        </label>
+                        <label>
+                            <input type="radio" name="align"><img src="images/icons.svg#alignDipole"/>
+                        </label>
+                        <br>Cell Alignment
+                    </div>
+
+                    <div>
+                        <input type="range" id="rotation" min="0" max="360" step="1" value="0"></br>Rotation: <label
+                            id="rotationLabel"></label><br>
+                        <input type="range" id="resolution" min="-2" max="2" step="1" value="0"></br>Resolution:
+                        <label
+                                id="resolutionLabel"></label>
+                    </div>
+                </div>
+                <br>
+                <div id="demo-tip">
+
+                    <img id="pointer" src="images/pointer.svg">
+                    <div class="hint ">
+                        Click or tap the image to erase parts of the pattern.
+
+                    </div>
+
+
+                </div>
+                <div class="is-left has-text-left">
+                    <p style="font-size: 10pt">
+                        When changing $(\Delta x, \Delta y)$, we automatically adjust the value of $\Delta t$ to avoid
+                        the Euler integration from overshooting.
+                        <br>
+                        In the Isotropic mode, the scaling factors are forced to be equal $\Delta x = \Delta y$.
+
+                    </p>
+
+                    <br>
+                </div>
+
+
+            </div>
+
+
+            <div id="pattern-controls">
+                <div class="pattern-selector-title" id="pattern_selector_title">
+                    <span>Target Appearance</span>
+                </div>
+                <div id="texture" class="pattern-selector">
+                    <div class="whitespace"></div>
+                </div>
+
+
+                <div id="texhint">
+
+                    <div id="origtex">
+                    </div>
+                    <span id="texhinttext"></span>
+                </div>
+
+
+            </div>
+
+
+        </div>
+        <div class="columns is-centered has-text-centered">
+            <div class="column">
+                <h2 class="title is-5">Multiscale Video</h2>
+                <video id="multiscale_video" autoplay controls muted loop playsinline height="100%" width="100%">
+                </video>
+            </div>
+
+
+        </div>
+        <div class="is-centered has-text-centered">
+            <p style="font-size: 14pt">
+                By varying the value of $(\Delta x, \Delta y)$ across the image, NoiseNCA allows creating Multiscale
+                patterns within
+                a single image. Notice how the scale of the patterns seamlessly changes from left to right.
+            </p>
+
+            <br>
+        </div>
+    </div>
+</section> -->
+
+<!-- Result section -->
+<!-- ===========================================================
+     BIG RESULT IMAGE
+     (drop this block right after the Abstract section)
+=========================================================== -->
+<section class="section">
+    <div class="container is-max-desktop has-text-centered">
+        <!-- Replace the src with your own image; feel free to
+             tweak max-width to any value or use a CSS class -->
+        <img src="data/images/teaser.png"
+             style="max-width:100%; height:auto;"
+             alt="High-resolution result">
+    </div>
+</section>
+
+
+<section class="section is-light">
+    <div class="container is-max-desktop">
+        <!-- Abstract. -->
+        <div class="columns is-centered has-text-centered">
+            <div class="column is-four-fifths">
+                <h2 class="title is-3">How it works?</h2>
+                <div class="content has-text-justified">
+
+                    <img src="data/images/pipeline.png" height="100%">
+                    <br><br>
+                    <p>
+                        The NCA operates on a coarse lattice of cells (in this example vertices of a mesh).
+                        <strong>Center:</strong>
+                        A sampling point \(\Point\) (red dot) inside a triangle primitive, whose vertices correspond to
+                        NCA cells
+                        \(\State_i,\,\State_j,\,\State_k\).
+                        The <em>local coordinate</em> \(u(\Point)\) expresses the point’s position inside the primitive,
+                        while the
+                        <em>locally averaged cell state</em> \(\bar{\State}(\Point)\) is obtained by interpolating the
+                        surrounding
+                        cell states.
+                        <strong>Right:</strong>
+                        The Implicit Pattern Producing Network (<b>IPPN</b>), A shared lightweight MLP, receives
+                        \((\bar{\State}(\Point), u(\Point))\) as input
+                        and outputs
+                        the target properties, such as color and surface normal, at point \(\Point\).
+                        The NCA and the IPPN are trained jointly and end-to-end.
+
+                    </p>
+
+                    <p>
+                        Play with the interactive visualization below to see coarse NCA cell states and the output the
+                        IPPN generates.
+                    </p>
+
+                </div>
+            </div>
+        </div>
+
+        <div class="tab_container">
+            <!-- Close the image -->
+            <!-- <span onclick="this.parentElement.style.display='none'" class="closebtn">&times;</span> -->
+            <!--                <div id="juxtapose-embed-text"-->
+            <!--                     style="font-size: 1.3rem;font-family:'Lucida Calligraphy', Times, serif;text-align:center">-->
+            <!--                    <strong style="color:#bc0505" ;>NCA Cell State</strong> → <strong style="color:#21ad2a" ;>IPPN-->
+            <!--                    output</strong>-->
+            <!--                </div>-->
+
+
+            <!-- Two sliders in a row -->
+            <div id="juxtapose-row" class="columns is-multiline is-centered">
+                <div class="column is-half" id="juxtapose-embed-1"></div>
+                <!-- <div class="column is-half" id="juxtapose-embed-2"></div> -->
+            </div>
+
+
+            <div>
+                <div id="juxtapose-hidden"></div>
+            </div>
+
+            <!-- Image text -->
+            <div id="imgtext"></div>
+        </div>
+
+        <!-- The grid: four columns -->
+        <div class="tab_row" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;">
+            <!-- This thumb-img class needs to be defined. It's in index.css -->
+            <img class="thumb-img" src="./data/images/ippn_nca/bubbly_0101_ippn.png"
+                 onclick="tab_gallery_click('bubbly_0101');">
+            <img class="thumb-img" src="./data/images/ippn_nca/chatgpt_fire_ippn.png"
+                 onclick="tab_gallery_click('chatgpt_fire');">
+            <img class="thumb-img" src="./data/images/ippn_nca/veined_0141_ippn.png"
+                 onclick="tab_gallery_click('veined_0141');">
+            <img class="thumb-img" src="./data/images/ippn_nca/chatgpt_wood_ippn.png"
+                 onclick="tab_gallery_click('chatgpt_wood');">
+            <img class="thumb-img" src="./data/images/ippn_nca/chatgpt_smoke_haze_ippn.png"
+                 onclick="tab_gallery_click('chatgpt_smoke_haze');">
+            <img class="thumb-img" src="./data/images/ippn_nca/crowd_ippn.png"
+                 onclick="tab_gallery_click('crowd');">
+        </div>
+
+
+    </div>
+</section>
+
+<!-- ================= GALLERY ONE ================= -->
+<section class="section">
+    <div class="container has-text-centered video-gallery" id="gallery-one">
+        <h2 class="title is-4">Growing Images and Shapes (GrowingNCA)</h2>
+        <div class="video-holder">
+            <video controls>
+                <source src="data/videos/growing/chameleon.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        </div>
+        <div class="thumb-row">
+            <img class="thumb-img" src="data/images/growing/chameleon.png" alt="clip one"
+                 data-video="data/videos/growing/chameleon.mp4">
+            <img class="thumb-img" src="data/images/growing/frog.png" alt="clip two"
+                 data-video="data/videos/growing/frog.mp4">
+            <img class="thumb-img" src="data/images/growing/bird.png" alt="clip three"
+                 data-video="data/videos/growing/bird.mp4">
+            <img class="thumb-img" src="data/images/growing/leaf.png" alt="clip three"
+                 data-video="data/videos/growing/leaf.mp4">
+            <img class="thumb-img" src="data/images/growing/gecko.png" alt="clip three"
+                 data-video="data/videos/growing/gecko.mp4">
+            <img class="thumb-img" src="data/images/growing/bulldog.png" alt="clip three"
+                 data-video="data/videos/growing/bulldog.mp4">
+        </div>
+    </div>
+</section>
+
+<!-- ================= GALLERY TWO ================= -->
+<section class="section">
+    <div class="container has-text-centered video-gallery" id="gallery-two">
+        <h2 class="title is-4">Textures on Meshes (MeshNCA)</h2>
+        <div class="video-holder">
+            <video controls>
+                <source src="data/videos/meshnca_pbr/Wood_Chiseled_001.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        </div>
+        <div class="thumb-row">
+            <img class="thumb-img" src="data/images/meshnca_pbr/Wood_Chiseled_001.png" alt="clip one"
+                 data-video="data/videos/meshnca_pbr/Wood_Chiseled_001.mp4">
+            <img class="thumb-img" src="data/images/meshnca_pbr/Coral_001.png" alt="clip one"
+                 data-video="data/videos/meshnca_pbr/Coral_001.mp4">
+            <img class="thumb-img" src="data/images/meshnca_pbr/Stylized_Wood_Tiles_001.png" alt="clip one"
+                 data-video="data/videos/meshnca_pbr/Stylized_Wood_Tiles_001.mp4">
+            <img class="thumb-img" src="data/images/meshnca_pbr/Lava_005.png" alt="clip one"
+                 data-video="data/videos/meshnca_pbr/Lava_005.mp4">
+            <img class="thumb-img" src="data/images/meshnca_pbr/Abstract_008.png" alt="clip one"
+                 data-video="data/videos/meshnca_pbr/Abstract_008.mp4">
+            <img class="thumb-img" src="data/images/meshnca_pbr/Stylized_Fur_001.png" alt="clip one"
+                 data-video="data/videos/meshnca_pbr/Stylized_Fur_001.mp4">
+        </div>
+    </div>
+</section>
+
+
+<!-- ================= GALLERY THREE ================= -->
+<section class="section">
+    <div class="container has-text-centered video-gallery" id="gallery-three">
+        <h2 class="title is-4">Self Organizing Textures (NCA)</h2>
+        <div class="video-holder">
+            <video controls>
+                <source src="data/videos/2d_pbr/Honeycomb_002.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        </div>
+        <div class="thumb-row">
+            <img class="thumb-img" src="data/images/2d_pbr/Honeycomb_002.png" alt="demo one"
+                 data-video="data/videos/2d_pbr/Honeycomb_002.mp4">
+            <img class="thumb-img" src="data/images/2d_pbr/Sci-fi_Wall_004.png" alt="demo one"
+                 data-video="data/videos/2d_pbr/Sci-fi_Wall_004.mp4">
+            <img class="thumb-img" src="data/images/2d_pbr/Wood_Acoustic_Panel_001.png" alt="demo one"
+                 data-video="data/videos/2d_pbr/Wood_Acoustic_Panel_001.mp4">
+            <img class="thumb-img" src="data/images/2d_pbr/Skin_Lizard_002.png" alt="demo one"
+                 data-video="data/videos/2d_pbr/Skin_Lizard_002.mp4">
+            <img class="thumb-img" src="data/images/2d_pbr/Leather_Padded_001.png" alt="demo one"
+                 data-video="data/videos/2d_pbr/Leather_Padded_001.mp4">
+            <img class="thumb-img" src="data/images/2d_pbr/Glass_Stained_001.png" alt="demo one"
+                 data-video="data/videos/2d_pbr/Glass_Stained_001.mp4">
+            <img class="thumb-img" src="data/images/2d_pbr/Sci-fi_Wall_010.png" alt="demo one"
+                 data-video="data/videos/2d_pbr/Sci-fi_Wall_010.mp4">
+        </div>
+    </div>
+</section>
+
+
+<section class="section hero is-light">
+    <div class="container is-max-desktop">
+        <!-- Abstract. -->
+        <div class="columns is-centered has-text-centered">
+            <div class="column is-four-fifths">
+                <h2 class="title is-3">Abstract</h2>
+                <div class="content has-text-justified">
+                    <p>
+                        Neural Cellular Automata (NCAs) are bio-inspired, self-organizing models that form complex,
+                        coherent patterns through repeated application of simple local rules, exhibiting emergent
+                        behaviors such as self-regeneration and spontaneous motion.
+                        Despite their success in texture synthesis and morphogenesis, NCAs remain restricted to
+                        low-resolution grids (e.g., 128×128).
+                        This stems from training time and memory requirements that grow drastically with grid size, the
+                        strictly local propagation of information (which impedes long-range cell communication), and the
+                        high computational demands of real-time inference on edge devices.
+                        In this work, we introduce an implicit representation framework that decouples cell‐state grid
+                        size from output resolution. All cells share a lightweight MLP decoder that takes the cell state
+                        and continuous local
+                        coordinates as input and produces output RGB values. The NCA operates on a coarse grid, while
+                        the shared MLP decoder generates outputs at arbitrary resolutions without increasing NCA
+                        computational cost.
+                        We also propose novel loss functions for both morphogenesis and texture‐synthesis tasks,
+                        specifically tailored for high‐resolution output with minimal memory and computation overhead.
+                        We train the NCA and MLP decoder jointly, end to end, and demonstrate that, with our new loss
+                        functions, they effectively generate high‐quality, high‐resolution outputs.
+                        NCAs equipped with our implicit decoder can generate full-HD outputs in real time while
+                        preserving their self-organizing, emergent behaviors. Moreover, because each MLP processes cell
+                        states independently, inference remains highly parallelizable and efficient.
+                        We demonstrate the applicability of our approach across multiple NCA variants (on 2D, 3D grids,
+                        and 3D meshes) and multiple tasks, including texture generation and morphogenesis (growing
+                        patterns from a seed), showing that with our proposed framework, NCAs seamlessly scale to
+                        high-resolution outputs with minimal computational overhead.
+                    </p>
+
+                </div>
+            </div>
+        </div>
+        <!--/ Abstract. -->
+
+        <!-- Paper video. -->
+        <!--        <div class="columns is-centered has-text-centered">-->
+        <!--            <div class="column is-four-fifths">-->
+        <!--                <h2 class="title is-3">Video</h2>-->
+        <!--                <div class="publication-video">-->
+        <!--                    <iframe src="https://www.youtube.com/embed/MrKrnHhk8IA?rel=0&amp;showinfo=0"-->
+        <!--                            frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>-->
+        <!--                </div>-->
+        <!--            </div>-->
+        <!--        </div>-->
+        <!--/ Paper video. -->
+    </div>
+</section>
+
+
+<section class="section" id="BibTeX">
+    <div class="container is-max-desktop content">
+        <h2 class="title">BibTeX</h2>
+        <pre><code>@misc{cells2pixels,
+  title   = {Neural Cellular Automata: From Cells to Pixels},
+  author  = {Pajouheshgar, Ehsan and Xu, Yitao and Abbasi, Ali and Mordvintsev, Alex and Jakob, Wenzel and S{\"u}sstrunk, Sabine},
+  year    = {2025}
+  note    = {arXiv preprint}
+}</code></pre>
+    </div>
+
+</section>
+
+
+<footer class="footer">
+    <div class="columns is-centered">
+        <div class="column is-8">
+            <div class="content">
+                <p>
+                    This website is licensed under a <a rel="license"
+                                                        href="http://creativecommons.org/licenses/by-sa/4.0/">Creative
+                    Commons Attribution-ShareAlike 4.0 International License</a>.
+                </p>
+
+                <p>
+                    Our demo is built upon the source code of<a href="https://distill.pub/selforg/2021/textures/">
+                    Self-Organizing Textures</a> paper on distill.
+                </p>
+
+                <p>
+                    Website source code is based on the <a href="https://nerfies.github.io/"> Nerfies</a> project page.
+                    If
+                    you want to reuse their <a href="https://github.com/nerfies/nerfies.github.io">source code</a>,
+                    please credit them appropriately.
+                </p>
+            </div>
+        </div>
+    </div>
+
+
+</footer>
+
+</body>
+</html>
+
+
+<script src="twgl.min.js"></script>
+
+<script src="dat.gui.min.js"></script>
+<script type="module">
+    import {createDemo} from './demo.js'
+
+    createDemo('demo');
+</script>

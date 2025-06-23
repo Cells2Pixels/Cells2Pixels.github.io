@@ -1,0 +1,639 @@
+
+
+#demo {
+    font-size: 14px;
+    user-select: none;
+    grid-template-columns: auto;
+    grid-template-rows: auto auto;
+    grid-auto-flow: column;
+    row-gap: 10px;
+    grid-column: middle;
+}
+
+
+.hint a {
+    color: inherit;
+}
+
+@media (min-width: 1180px) {
+    #demo {
+        grid-template-columns: 512px 1fr;
+        grid-template-rows: auto;
+    }
+
+    #pattern-controls {
+        grid-row: 1;
+    }
+}
+
+#demo-canvas {
+    border: 1px solid lightgrey;
+    image-rendering: pixelated;
+    touch-action: none;
+    width: 100%;
+}
+
+#pattern-controls {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: min-content minmax(0, 0.8fr) min-content;
+    /*row-gap: 5px;*/
+    overflow: hidden;
+}
+
+@media (max-width: 1180px) {
+    #pattern-controls {
+        grid-template-rows: min-content minmax(0, 0.5fr) min-content;
+    }
+}
+
+.pattern-selector::-webkit-scrollbar {
+    display: none;
+}
+
+
+/*.pattern-selector-texture::-webkit-scrollbar {*/
+/*    display: none;*/
+/*}*/
+
+
+
+/*.pattern-selector-motion::-webkit-scrollbar {*/
+/*    display: none;*/
+/*}*/
+
+#demo-tip {
+    display: grid;
+    grid-template-columns: 40px auto;
+    align-items: center;
+    column-gap: 10px;
+    margin-bottom: 20px;
+}
+
+#pointer {
+    width: 40px;
+}
+
+#status {
+    font-size: 12px;
+    color: rgba(0, 0, 0, 0.6);
+    font-family: monospace;
+}
+
+#model-hints {
+    color: rgba(0, 0, 0, 0.6);
+    grid-column: 1/3;
+}
+
+#model-hints span {
+    display: none;
+}
+
+.hint {
+    color: rgba(0, 0, 0, 0.6);
+    line-height: 1.4em;
+    user-select: text;
+}
+
+input[type=range] {
+    -webkit-appearance: none; /* Hides the slider so that custom slider can be made */
+    width: 95%; /* Specific width is required for Firefox. */
+    background: transparent; /* Otherwise white in Chrome */
+    margin-bottom: 8px;
+}
+
+.hint a {
+    font-size: 90%;
+}
+
+@media (max-width: 350px) {
+    .hint a {
+        font-size: 75%;
+    }
+}
+
+input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+}
+
+input[type=range]:focus {
+    outline: none; /* Removes the blue border. You should probably do some kind of focus styling for accessibility reasons though. */
+}
+
+input[type=range]::-ms-track {
+    width: 100%;
+    cursor: pointer;
+
+    /* Hides the slider so custom styles can be added */
+    background: transparent;
+    border-color: transparent;
+    color: transparent;
+}
+
+/* Thumb */
+
+/* Special styling for WebKit/Blink */
+input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    height: 14px;
+    width: 14px;
+    border-radius: 50%;
+    background: steelblue;
+    cursor: pointer;
+    margin-top: -6px; /* You need to specify a margin in Chrome, but in Firefox and IE it is automatic */
+}
+
+/* All the same stuff for Firefox */
+input[type=range]::-moz-range-thumb {
+    height: 14px;
+    width: 14px;
+    border-radius: 50%;
+    background: steelblue;
+    cursor: pointer;
+    border: none;
+}
+
+/* All the same stuff for IE */
+input[type=range]::-ms-thumb {
+    height: 14px;
+    width: 14px;
+    border-radius: 50%;
+    background: grey;
+    cursor: pointer;
+}
+
+/* Track */
+
+input[type=range]::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 3px;
+    cursor: pointer;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 2px;
+    border: none;
+}
+
+input[type=range]:focus::-webkit-slider-runnable-track {
+    background: rgba(0, 0, 0, 0.15);
+}
+
+input[type=range]::-moz-range-track {
+    width: 100%;
+    height: 3px;
+    cursor: pointer;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 2px;
+    border: none;
+}
+
+input[type=range]::-ms-track {
+    width: 100%;
+    height: 3px;
+    cursor: pointer;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 2px;
+    border: none;
+}
+
+input[type=range]::-ms-fill-lower {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+input[type=range]:focus::-ms-fill-lower {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+input[type=range]::-ms-fill-upper {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+input[type=range]:focus::-ms-fill-upper {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+input[type="radio"] {
+    background-color: steelblue;
+}
+
+#colab-hero-div {
+    /*grid-column: 1/3;*/
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    border-top-width: 1px;
+    border-top-style: solid;
+    border-top-color: rgba(0, 0, 0, 0.1);
+    padding-top: 15px;
+    text-align: center;
+}
+
+#colab-hero {
+    margin: auto;
+    /*display: block;*/
+    text-align: center;
+    /*width: 200px;*/
+    height: 16px;
+}
+
+.pattern-selector {
+    grid-column: 1/3;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+    justify-items: center;
+    overflow-x: hidden;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-y: contain;
+    padding-top: 5px;
+    max-height: 800px;
+}
+
+/*.pattern-selector-texture {*/
+/*    grid-column: 1/3;*/
+/*    display: grid;*/
+/*    grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));*/
+/*    justify-items: center;*/
+/*    overflow-x: hidden;*/
+/*    scroll-snap-type: x mandatory;*/
+/*    overscroll-behavior-y: contain;*/
+/*    padding-top: 5px;*/
+/*}*/
+
+/*.pattern-selector-motion {*/
+/*    grid-column: 1/3;*/
+/*    display: grid;*/
+/*    grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));*/
+/*    justify-items: center;*/
+/*    overflow-x: hidden;*/
+/*    scroll-snap-type: x mandatory;*/
+/*    overscroll-behavior-y: contain;*/
+/*    padding-top: 5px;*/
+/*}*/
+
+/*.pattern-selector > :last-child {*/
+/*margin-bottom: 100%;*/
+/*}*/
+
+.pattern-selector-title {
+    grid-column: 1/3;
+    text-align: center;
+    font-weight: bold;
+    /*padding-bottom: 3%;*/
+    /*padding-top: 3px;*/
+}
+
+#motion_selector {
+    padding-top: 3%;
+}
+
+.overlaygrad {
+    z-index: 1;
+    pointer-events: none;
+    height: 100%;
+    background: linear-gradient(to bottom, rgb(255, 255, 255) 0%, rgba(255, 255, 255, 0.0) 10%, rgba(255, 255, 255, 0.0) 90%, rgb(255, 255, 255) 100%);
+}
+
+.overlayicon {
+    z-index: 1;
+    pointer-events: none;
+    height: 100%;
+    /*background: url(images/mouse.svg) rgba(255, 255, 255, 0.4);*/
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 1.0;
+    transition: opacity 1.0s ease-out;
+}
+
+#origtex {
+    margin: auto;
+    margin-top: 10px;
+    height: 130px;
+    width: 130px;
+}
+
+#origmot {
+    margin: auto;
+    margin-top: 10px;
+    height: 128px;
+    width: 128px;
+}
+
+#texhint {
+    height: 170px;
+    grid-column: 1/3;
+    /*grid-template-columns: 64px 64px;*/
+    /*column-count: 1;*/
+    grid-template-columns: 1fr 1fr;
+
+    /*grid-column: 1/3;*/
+    margin-top: 10px;
+    border-top: 3px solid rgba(0, 0, 0, 0.2);
+    border-top-width: 3px;
+    border-top-style: solid;
+    border-top-color: rgba(0, 0, 0, 0.2);
+    text-align: center;
+    line-height: 2em;
+}
+
+.whitespace {
+    grid-column: 1/-1;
+    height: 5px;
+    width: 1px;
+}
+
+/* PHONES */
+@media (max-width: 500px) {
+    .whitespace {
+        grid-column: auto;
+        height: 1px;
+        width: 1px;
+        /* Also a hack - indends the point at which scroll starts... */
+        margin-right: 55px;
+    }
+
+    #pattern-controls {
+        grid-template-rows: min-content 64px min-content;
+    }
+
+    .pattern-selector {
+        grid-template-columns: repeat(100, minmax(64px, 1fr));
+        grid-template-rows: auto;
+        overflow-x: scroll;
+        overflow-y: hidden;
+        padding-top: 0%;
+        padding-left: 2%;
+        overscroll-behavior-y: auto;
+    }
+
+
+    .overlaygrad {
+        z-index: 1;
+        pointer-events: none;
+        height: 100%;
+        background: linear-gradient(to right, rgb(255, 255, 255) 0%, rgba(255, 255, 255, 0.0) 5%, rgba(255, 255, 255, 0.0) 95%, rgb(255, 255, 255) 100%);
+    }
+
+    .overlayicon {
+        z-index: 1;
+        pointer-events: none;
+        height: 100%;
+        background: url(images/touch.svg) rgba(255, 255, 255, 0.4);
+        background-size: 55px;
+        background-position: center;
+        background-repeat: no-repeat;
+        opacity: 1.0;
+        transition: opacity 1.0s ease-out;
+    }
+
+    .pattern-selector-title {
+        padding-bottom: 0%;
+    }
+
+    #texhint {
+        height: 135px;
+    }
+
+    #origtex {
+        height: 96px;
+        width: 96px;
+    }
+}
+
+.pattern-selector * {
+    cursor: pointer;
+}
+
+.pattern-selector * {
+    cursor: pointer;
+}
+
+
+
+.texture-square {
+    /*background-image: url('textures/banded.png');*/
+    /*background-position:center;
+    background-repeat:no-repeat;
+    background-size:cover;
+    */
+    /* some weird kludge to allow same width as height */
+    --border-width: 5px;
+    border-style: solid;
+    box-sizing: border-box;
+    border-width: var(--border-width);
+    border-color: white;
+    width: 100%;
+    height: 0;
+    padding-top: calc(100% - 2 * var(--border-width));
+    scroll-snap-align: center;
+}
+
+.texture-overlay, #texture {
+    grid-column: 1;
+    grid-row: 2;
+}
+
+.motion-overlay, #motion {
+    grid-column: 1;
+    grid-row: 4;
+}
+
+.demo-controls {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+
+    grid-template-rows: min-content min-content;
+    gap: 0px 5px;
+    text-align: center;
+    line-height: 1.4em;
+/**/
+}
+
+.demo-icon {
+    width: 30px;
+    height: 30px;
+    background: steelblue;
+    fill: white;
+    border-radius: 20px;
+    padding: 4px;
+    margin: 0px;
+    cursor: pointer;
+}
+
+.disabled {
+    background: grey;
+    cursor: default;
+}
+
+/* radio button groups */
+
+.button-group {
+    border-radius: 4px;
+    padding: 4px;
+    background: #eee;
+}
+
+.button-group input {
+    display: none;
+}
+
+.button-group img {
+    cursor: pointer;
+    border: 0px solid white;
+}
+
+.button-group input:checked + img {
+    border: 2px solid goldenrod;
+}
+
+
+.tooltip {
+    position: relative;
+    display: inline-block;
+    /*border-bottom: 1px dotted black;*/
+}
+
+.tooltip .tooltiptext {
+    visibility: hidden;
+    width: 120px;
+    background-color: black;
+    color: #fff;
+    text-align: center;
+    border-radius: 6px;
+    padding: 5px 0;
+
+    /* Position the tooltip */
+    position: absolute;
+    z-index: 1;
+}
+
+.tooltip:hover .tooltiptext {
+    visibility: visible;
+}
+
+
+.subgrid {
+    grid-column: screen;
+    display: grid;
+    grid-template-columns: inherit;
+    grid-template-rows: inherit;
+    grid-column-gap: inherit;
+    grid-row-gap: inherit;
+}
+
+d-figure.base-grid {
+    grid-column: screen;
+    background: hsl(0, 0%, 97%);
+    padding: 20px 0;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+d-figure {
+    margin-bottom: 1em;
+    position: relative;
+}
+
+d-figure > figure {
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+.shaded-figure {
+    background-color: hsl(0, 0%, 97%);
+    border-top: 1px solid hsla(0, 0%, 0%, 0.1);
+    border-bottom: 1px solid hsla(0, 0%, 0%, 0.1);
+    padding: 30px 0;
+}
+
+.pointer {
+    position: absolute;
+    width: 26px;
+    height: 26px;
+    top: 26px;
+    left: -48px;
+}
+
+
+
+
+
+/**/
+/*https://alvarotrigo.com/blog/css-checkbox-styles/*/
+@charset "UTF-8";
+.toggler-wrapper {
+
+  display: block;
+  width: 45px;
+  height: 28px;
+  /*cursor: pointer;*/
+  position: absolute;
+}
+
+.toggler-wrapper input[type="checkbox"] {
+  display: none;
+}
+
+.toggler-wrapper input[type="checkbox"]:checked+.toggler-slider {
+  background-color: #cc6844;
+}
+
+.toggler-wrapper .toggler-slider {
+  background-color: #63a22f;
+  position: absolute;
+  border-radius: 100px;
+  top: 25px;
+  left: 20px;
+  width: 100%;
+  height: 100%;
+  -webkit-transition: all 300ms ease;
+  transition: all 300ms ease;
+}
+
+.toggler-wrapper .toggler-knob {
+  position: absolute;
+  -webkit-transition: all 300ms ease;
+  transition: all 300ms ease;
+}
+
+
+/*Style 19*/
+
+.toggler-wrapper.style-19 input[type="checkbox"]:checked+.toggler-slider {
+  background-color: transparent;
+  border-color: #cc6844;
+}
+
+.toggler-wrapper.style-19 input[type="checkbox"]:checked+.toggler-slider:after {
+  content: 'Isotropic';
+}
+
+.toggler-wrapper.style-19 input[type="checkbox"]:checked+.toggler-slider .toggler-knob {
+  left: calc(100% - 19px - 3px);
+  background-color: #cc6844;
+}
+
+.toggler-wrapper.style-19 .toggler-slider {
+  background-color: transparent;
+  border-radius: 0;
+  border: 2px solid #63a22f;
+}
+
+.toggler-wrapper.style-19 .toggler-slider:after {
+  content: 'Anisotropic';
+  position: relative;
+  top: 1px;
+  left: 55px;
+  -webkit-transform: translateY(-50%);
+  transform: translateY(-50%);
+  font-size: 100%;
+    font-weight: bold;
+  /*text-transform: uppercase;*/
+  /*font-weight: 500;*/
+  /*opacity: 0.7;*/
+}
+
+.toggler-wrapper.style-19 .toggler-knob {
+  width: calc(25px - 6px);
+  height: calc(25px - 6px);
+  left: 3px;
+  top: 3px;
+  background-color: #63a22f;
+}
