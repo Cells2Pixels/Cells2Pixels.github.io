@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Siren NCA</title>
+    <script src="swissgl.js"></script>
+    <script src="dat.gui.min.js"></script>
+    <style>
+        body {background-color: black;}
+        canvas {width: 100vw; height: 100vh;}
+    </style>
+</head>
+<body>
+    <canvas id="c"></canvas>
+    
+
+<script>
+    const $ = s=>document.querySelector(s);
+    const canvas = $("#c");
+    const glsl = SwissGL(canvas);
+    
+    const CHN=16, C4=CHN/4, SCALE=8, S4=3;
+    let models, model;
+    let nca_grid;
+    let siren_grid;
+
+    const gui = new dat.GUI();
+
+    const params = {
+        model: 'Stylized_blocks_001',
+        //model: 'Leather_Padded_001',
+    };
+    const uniforms = {
+        visMode: 0,
+        heightScale: 0.1,
+        showWireframe: false,
+        zoom:1.0,
+        geom:0,
+    }
+    gui.add(uniforms, 'visMode', {'rgb':0, 'normal':1, 'height':2, 
+                                  'ao':3, 'roughness':4});
+    gui.add(uniforms, 'geom', {'plane':0, 'torus':1});
+    gui.add(uniforms, 'heightScale', 0.0, 1.0);
+    gui.add(uniforms, 'zoom', 1.0, 8.0);
+    gui.add(uniforms, 'showWireframe');
+
+
+    document.addEventListener('keydown', e=>{
+        if (e.key == 'r') {reset();}
+    });
+
+    async function init() {
+        const response = await fetch('data/siren_nca.json');
+        models = await response.json();
+        for (const name in models)
+        for (const k in models[name]) {
+            const src = models[name][k];
+            src.data = new Float32Array(
+                Uint8Array.from(atob(src.data64), c=>c.charCodeAt(0)).buffer);
+            delete src.data64;
+        }
+        gui.add(params, 'model', Object.keys(models)).onChange(name=>{
+            model = load_model(name);
+        });
+        model = load_model(params.model);
+        reset();
+        frame();
+    }
+
+    function load_model(name) {
+        const src = models[name];
+        // init NCA
+        const [ch,ci]=src['nca.w1.weight'].shape, co=src['nca.w2.weight.T'].shape[1];
+        console.assert(co==CHN)
+        const nca = {
+            w1: glsl({}, {size:[ci/4,ch], format:'rgba32f',
+                data:src['nca.w1.weight'].data, tag:'w1'}),
+            b1: glsl({}, {size:[1,ch], format:'r32f', 
+                data:src['nca.w1.bias'].data, tag:'b1'}),
+            w2t: glsl({}, {size:[co/4,ch], format:'rgba32f', 
+                data:src['nca.w2.weight.T'].data, tag:'w2t'}),
+        };
+
+        // init Siren
+        const sirenLayerN = 4;
+        const inc = [`const int C4 = ${C4}; const int D4=32/4;`];
+        const siren = {};
+        for (let i=0; i<sirenLayerN; ++i) {
+            const last = i == sirenLayerN-1;
+            const s = `siren.net.${i}` + (last ? '' : '.linear');
+            const weight = src[s+'.weight'];
+            const bias = src[s+'.bias'];
+            const [no, ni] = weight.shape;
+            inc.push(`
+                uniform vec4 W${i}[${no*ni/4}];
+                uniform float B${i}[${no}];
+                void run_layer${i}(in vec4 src[D4], out vec4 dst[D4]) {
+                    const int no=${no}, ni=${ni};
+                    for (int i=0; i<no; ++i) {
+                        float a = B${i}[i];
+                        #pragma unroll
+                        for (int j=0; j<ni/4; ++j) {
+                            a += dot(src[j], W${i}[i*ni/4 + j]);
+                        }
+                        dst[i/4][i%4] = ${last} ? a : sin(a*10.0);
+                    }
+                }`);
+            siren['W'+i] = weight.data;
+            siren['B'+i] = bias.data;
+        }
+        siren['Inc'] = inc.join('\n');
+        return {nca, siren};
+    }
+    init();
+
+    function frame(time) {
+        glsl.adjustCanvas();
+        time /= 1000.0;
+        step();
+        updateSiren();
+        glsl({T:siren_grid.linear, Mesh:[512, 512], ...uniforms, Aspect:'fit',
+            time, perspective:0.5, DepthTest:1, MeshMode:1, VP:`
+            float height = T(UV,0).a;
+            VPos = vec4(XY,0,1);
+            float scaledHeight = height*heightScale;
+            if (geom==0.0) {
+                VPos.xyz = vec3(XY,scaledHeight);
+            } else {
+                VPos.xyz = torus(UV, 0.7, 0.2+scaledHeight);
+            }
+            VPos.xy *= rot2(time*0.1);
+            VPos.xyz *= zoom;
+            VPos.yz *= rot2(0.8);
+            VPos.zw = vec2(-VPos.z*0.01, 1.0-VPos.z*perspective);
+            `, FP:`
+            vec4 v0=T(UV,0), v1=T(UV,1), v2=T(UV,2);
+            vec3 rgb = v0.rgb;
+            float height = v0.a;
+            float roughness = v1.x;
+            float ao = v1.y;
+            vec3 normal = vec3(v1.zw, v2.x);
+            FOut = vec4(rgb, 1.0);
+            if (visMode==1.0) {
+                FOut.rgb = normal;
+            } else if (visMode==2.0) {
+                FOut.rgb = vec3(height);
+            } else if (visMode==3.0) {
+                FOut.rgb = vec3(ao);
+            } else if (visMode==4.0) {
+                FOut.rgb = vec3(roughness);
+            }
+            if (showWireframe) {
+                FOut.rgb = FOut.rgb + wireframe()*0.2;
+            }
+        `});
+
+        requestAnimationFrame(frame);
+    }
+
+    function reset() {
+        nca_grid = glsl({seed:42, FP:`
+            FOut = FOut1 = FOut2 = FOut3 = vec4(0);
+        `}, {size:[128, 128], layern:C4, format:'rgba16f', story:2, tag:'grid'});
+    }
+
+    function step() {
+        const {nca} = model;
+        glsl({...nca, seed:Math.random()*26321, FP:`
+            const int C4 = ${C4};
+            const mat3 Kx = mat3(-1,-2,-1, 0,0,0, 1,2,1);
+            const mat3 Ky = mat3(-1,0,1, -2,0,2, -1,0,1);
+            const mat3 Klap = mat3(1,2,1, 2,-12,2, 1,2,1);
+
+            vec4 perc[C4*4], upd[C4];
+            
+            void neib(int x, int y) {
+                ivec2 p = (ivec2(I.x+x-1, I.y+y-1)+ViewSize)%ViewSize;
+                for (int i=0; i<C4; ++i) {
+                    vec4 v = Src(p,i);
+                    perc[C4+i]   += Kx[x][y]*v; 
+                    perc[C4*2+i] += Ky[x][y]*v;
+                    perc[C4*3+i] += Klap[x][y]*v;
+                }
+            }
+
+            void fragment() {
+                for (int i=0; i<C4; ++i) {
+                    upd[i] = perc[i] = Src(I,i);
+                    perc[i+C4*3] = Klap[1][1]*upd[i];
+                }
+                FOut = upd[0]; FOut1 = upd[1]; FOut2 = upd[2]; FOut3 = upd[3];
+                if (hash(ivec3(I,seed)).x>0.5) return;
+                neib(0,0); neib(0,1); neib(0,2);
+                neib(1,0);            neib(1,2);
+                neib(2,0); neib(2,1); neib(2,2);
+                
+                int ci = w1_size().x, ch = w1_size().y;
+                for (int h=0; h<ch; ++h) {
+                    float y = b1(ivec2(0, h)).x;
+                    for (int i=0; i<ci; ++i) {y += dot(perc[i], w1(ivec2(i, h)));}
+                    if (y<=0.0) continue;
+                    for (int i=0; i<C4; ++i) {upd[i] += y*w2t(ivec2(i, h));}
+                }
+                FOut = upd[0]; FOut1 = upd[1]; FOut2 = upd[2]; FOut3 = upd[3];
+            }
+        `}, nca_grid);
+    }
+
+    function updateSiren() {
+        const {siren} = model;
+        const [w, h] = nca_grid.size;
+        siren_grid = glsl({nca_grid:nca_grid[0].linear, ...siren, FP:`
+            vec4 A[D4], B[D4];
+            vec2 sz = vec2(nca_grid_size().xy);
+            vec2 fetch_uv = UV+0.5/sz;
+            vec2 patch_coord = (fract(UV*sz)-0.5)*2.0;
+            A[0].yx = patch_coord;
+            for (int i=0; i<C4; ++i) {
+                vec4 v = nca_grid(fetch_uv,i);
+                A[i].zw = v.xy; A[i+1].xy = v.zw;
+            }
+            run_layer0(A, B); run_layer1(B, A);
+            run_layer2(A, B); run_layer3(B, A);
+            FOut = A[0]; FOut1 = A[1]; FOut2 = A[2];
+        `}, {size:[w*SCALE, h*SCALE], 
+            format:'rgba16f', layern:S4, tag:'siren'})
+    }
+
+</script>
+    
+</body>
+</html>
