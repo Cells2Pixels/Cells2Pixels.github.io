@@ -45,7 +45,7 @@
     gui.add(uniforms, 'zoom', 1.0, 8.0);
     gui.add(uniforms, 'showWireframe');
     gui.add(params, 'runModel');
-    gui.add(params, 'sirenScale', 2, 8, 1);
+    gui.add(params, 'sirenScale', 2, 8, 1).onChange(updateSiren);
 
     document.addEventListener('keydown', e=>{
         if (e.key == 'r') {reset();}
