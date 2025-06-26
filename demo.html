@@ -21,7 +21,7 @@
     const glsl = SwissGL(canvas);
     const gui = new dat.GUI();
     
-    const CHN=16, C4=CHN/4, SCALE=8, S4=3;
+    const CHN=16, C4=CHN/4, S4=3;
     let models, model;
     let nca_grid, siren_grid;
 
@@ -29,6 +29,7 @@
     const params = {
         model: 'Stylized_blocks_001',
         runModel: true,
+        sirenScale: 8,
     };
     const uniforms = {
         visMode: 0,
@@ -40,10 +41,11 @@
     gui.add(uniforms, 'visMode', {'rgb':0, 'normal':1, 'height':2, 
                                   'ao':3, 'roughness':4});
     gui.add(uniforms, 'geom', {'plane':0, 'torus':1});
-    gui.add(uniforms, 'heightScale', 0.0, 1.0);
+    gui.add(uniforms, 'heightScale', 0.0, 0.5);
     gui.add(uniforms, 'zoom', 1.0, 8.0);
     gui.add(uniforms, 'showWireframe');
     gui.add(params, 'runModel');
+    gui.add(params, 'sirenScale', 2, 8, 1);
 
     document.addEventListener('keydown', e=>{
         if (e.key == 'r') {reset();}
@@ -210,6 +212,7 @@
 
     function updateSiren() {
         const {siren} = model;
+        const scale = params.sirenScale;
         const [w, h] = nca_grid.size;
         siren_grid = glsl({nca_grid:nca_grid[0].linear, ...siren, FP:`
             vec4 A[D4], B[D4];
@@ -224,7 +227,7 @@
             run_layer0(A, B); run_layer1(B, A);
             run_layer2(A, B); run_layer3(B, A);
             FOut = A[0]; FOut1 = A[1]; FOut2 = A[2];
-        `}, {size:[w*SCALE, h*SCALE], 
+        `}, {size:[w*scale, h*scale], 
             format:'rgba16f', layern:S4, tag:'siren'})
     }
 
