@@ -426,6 +426,60 @@
              alt="High-resolution result">
     </div>
 </section>
+<section class="section hero is-light">
+    <div class="container is-max-desktop">
+        <!-- Abstract. -->
+        <div class="columns is-centered has-text-centered">
+            <div class="column is-four-fifths">
+                <h2 class="title is-3">Abstract</h2>
+                <div class="content has-text-justified">
+                    <p>
+                        Neural Cellular Automata (NCAs) are bio-inspired, self-organizing models that form complex,
+                        coherent patterns through repeated application of simple local rules, exhibiting emergent
+                        behaviors such as self-regeneration and spontaneous motion.
+                        Despite their success in texture synthesis and morphogenesis, NCAs remain restricted to
+                        low-resolution grids (e.g., 128×128).
+                        This stems from training time and memory requirements that grow drastically with grid size, the
+                        strictly local propagation of information (which impedes long-range cell communication), and the
+                        high computational demands of real-time inference on edge devices.
+                        In this work, we introduce an implicit representation framework that decouples cell‐state grid
+                        size from output resolution. All cells share a lightweight MLP decoder that takes the cell state
+                        and continuous local
+                        coordinates as input and produces output RGB values. The NCA operates on a coarse grid, while
+                        the shared MLP decoder generates outputs at arbitrary resolutions without increasing NCA
+                        computational cost.
+                        We also propose novel loss functions for both morphogenesis and texture‐synthesis tasks,
+                        specifically tailored for high‐resolution output with minimal memory and computation overhead.
+                        We train the NCA and MLP decoder jointly, end to end, and demonstrate that, with our new loss
+                        functions, they effectively generate high‐quality, high‐resolution outputs.
+                        NCAs equipped with our implicit decoder can generate full-HD outputs in real time while
+                        preserving their self-organizing, emergent behaviors. Moreover, because each MLP processes cell
+                        states independently, inference remains highly parallelizable and efficient.
+                        We demonstrate the applicability of our approach across multiple NCA variants (on 2D, 3D grids,
+                        and 3D meshes) and multiple tasks, including texture generation and morphogenesis (growing
+                        patterns from a seed), showing that with our proposed framework, NCAs seamlessly scale to
+                        high-resolution outputs with minimal computational overhead.
+                    </p>
+
+                </div>
+            </div>
+        </div>
+        <!--/ Abstract. -->
+
+        <!-- Paper video. -->
+        <!--        <div class="columns is-centered has-text-centered">-->
+        <!--            <div class="column is-four-fifths">-->
+        <!--                <h2 class="title is-3">Video</h2>-->
+        <!--                <div class="publication-video">-->
+        <!--                    <iframe src="https://www.youtube.com/embed/MrKrnHhk8IA?rel=0&amp;showinfo=0"-->
+        <!--                            frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>-->
+        <!--                </div>-->
+        <!--            </div>-->
+        <!--        </div>-->
+        <!--/ Paper video. -->
+    </div>
+</section>
+
 
 
 <section class="section is-light">
@@ -598,59 +652,6 @@
 </section>
 
 
-<section class="section hero is-light">
-    <div class="container is-max-desktop">
-        <!-- Abstract. -->
-        <div class="columns is-centered has-text-centered">
-            <div class="column is-four-fifths">
-                <h2 class="title is-3">Abstract</h2>
-                <div class="content has-text-justified">
-                    <p>
-                        Neural Cellular Automata (NCAs) are bio-inspired, self-organizing models that form complex,
-                        coherent patterns through repeated application of simple local rules, exhibiting emergent
-                        behaviors such as self-regeneration and spontaneous motion.
-                        Despite their success in texture synthesis and morphogenesis, NCAs remain restricted to
-                        low-resolution grids (e.g., 128×128).
-                        This stems from training time and memory requirements that grow drastically with grid size, the
-                        strictly local propagation of information (which impedes long-range cell communication), and the
-                        high computational demands of real-time inference on edge devices.
-                        In this work, we introduce an implicit representation framework that decouples cell‐state grid
-                        size from output resolution. All cells share a lightweight MLP decoder that takes the cell state
-                        and continuous local
-                        coordinates as input and produces output RGB values. The NCA operates on a coarse grid, while
-                        the shared MLP decoder generates outputs at arbitrary resolutions without increasing NCA
-                        computational cost.
-                        We also propose novel loss functions for both morphogenesis and texture‐synthesis tasks,
-                        specifically tailored for high‐resolution output with minimal memory and computation overhead.
-                        We train the NCA and MLP decoder jointly, end to end, and demonstrate that, with our new loss
-                        functions, they effectively generate high‐quality, high‐resolution outputs.
-                        NCAs equipped with our implicit decoder can generate full-HD outputs in real time while
-                        preserving their self-organizing, emergent behaviors. Moreover, because each MLP processes cell
-                        states independently, inference remains highly parallelizable and efficient.
-                        We demonstrate the applicability of our approach across multiple NCA variants (on 2D, 3D grids,
-                        and 3D meshes) and multiple tasks, including texture generation and morphogenesis (growing
-                        patterns from a seed), showing that with our proposed framework, NCAs seamlessly scale to
-                        high-resolution outputs with minimal computational overhead.
-                    </p>
-
-                </div>
-            </div>
-        </div>
-        <!--/ Abstract. -->
-
-        <!-- Paper video. -->
-        <!--        <div class="columns is-centered has-text-centered">-->
-        <!--            <div class="column is-four-fifths">-->
-        <!--                <h2 class="title is-3">Video</h2>-->
-        <!--                <div class="publication-video">-->
-        <!--                    <iframe src="https://www.youtube.com/embed/MrKrnHhk8IA?rel=0&amp;showinfo=0"-->
-        <!--                            frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>-->
-        <!--                </div>-->
-        <!--            </div>-->
-        <!--        </div>-->
-        <!--/ Paper video. -->
-    </div>
-</section>
 
 
 <section class="section" id="BibTeX">
