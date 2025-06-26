@@ -19,17 +19,16 @@
     const $ = s=>document.querySelector(s);
     const canvas = $("#c");
     const glsl = SwissGL(canvas);
+    const gui = new dat.GUI();
     
     const CHN=16, C4=CHN/4, SCALE=8, S4=3;
     let models, model;
-    let nca_grid;
-    let siren_grid;
+    let nca_grid, siren_grid;
 
-    const gui = new dat.GUI();
 
     const params = {
         model: 'Stylized_blocks_001',
-        //model: 'Leather_Padded_001',
+        runModel: true,
     };
     const uniforms = {
         visMode: 0,
@@ -44,7 +43,7 @@
     gui.add(uniforms, 'heightScale', 0.0, 1.0);
     gui.add(uniforms, 'zoom', 1.0, 8.0);
     gui.add(uniforms, 'showWireframe');
-
+    gui.add(params, 'runModel');
 
     document.addEventListener('keydown', e=>{
         if (e.key == 'r') {reset();}
@@ -117,8 +116,10 @@
     function frame(time) {
         glsl.adjustCanvas();
         time /= 1000.0;
-        step();
-        updateSiren();
+        if (params.runModel) {
+            step();
+            updateSiren();
+        }
         glsl({T:siren_grid.linear, Mesh:[512, 512], ...uniforms, Aspect:'fit',
             time, perspective:0.5, DepthTest:1, MeshMode:1, VP:`
             float height = T(UV,0).a;
