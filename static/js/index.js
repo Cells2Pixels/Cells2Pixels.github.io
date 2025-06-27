@@ -70,8 +70,8 @@ window.onload = function () {
 };
 
 function tab_gallery_click(idx) {
-	const leftImage1 = `data/images/ippn_nca/${idx}_nca.png`;
-	const rightImage1 = `data/images/ippn_nca/${idx}_ippn.png`;
+	const leftImage1 = `data/images/lppn_nca/${idx}_nca.png`;
+	const rightImage1 = `data/images/lppn_nca/${idx}_lppn.png`;
 
 	document.getElementById("juxtapose-embed-1").innerHTML = "";
 	// document.getElementById("juxtapose-embed-2").innerHTML = "";
@@ -79,7 +79,7 @@ function tab_gallery_click(idx) {
 	new juxtapose.JXSlider('#juxtapose-embed-1',
 		[
 			{src: leftImage1, label: 'NCA Cell State'},
-			{src: rightImage1, label: 'IPPN Output'}
+			{src: rightImage1, label: 'LPPN Output'}
 		],
 		{
 			animate: true,

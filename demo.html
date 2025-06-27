@@ -27,9 +27,9 @@
 
 
     const params = {
-        model: 'Stylized_blocks_001',
+        model: 'Sci-fi_Wall_010',
         runModel: true,
-        sirenScale: 8,
+        relativeScale: 8,
     };
     const uniforms = {
         visMode: 0,
@@ -45,7 +45,7 @@
     gui.add(uniforms, 'zoom', 1.0, 8.0);
     gui.add(uniforms, 'showWireframe');
     gui.add(params, 'runModel');
-    gui.add(params, 'sirenScale', 2, 8, 1).onChange(updateSiren);
+    gui.add(params, 'relativeScale', 1, 8, 1).onChange(updateSiren);
 
     document.addEventListener('keydown', e=>{
         if (e.key == 'r') {reset();}
@@ -212,7 +212,7 @@
 
     function updateSiren() {
         const {siren} = model;
-        const scale = params.sirenScale;
+        const scale = params.relativeScale;
         const [w, h] = nca_grid.size;
         siren_grid = glsl({nca_grid:nca_grid[0].linear, ...siren, FP:`
             vec4 A[D4], B[D4];
