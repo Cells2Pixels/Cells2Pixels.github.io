@@ -6,22 +6,29 @@
     <title>Siren NCA</title>
     <script src="swissgl.js"></script>
     <script src="dat.gui.min.js"></script>
+    <script src="https://webgl2fundamentals.org/webgl/resources/m4.js"></script>
     <style>
-        body {background-color: black;}
-        canvas {width: 100vw; height: 100vh;}
+        body {
+            background-color: black;
+        }
+
+        canvas {
+            width: 100vw;
+            height: 100vh;
+        }
     </style>
 </head>
 <body>
-    <canvas id="c"></canvas>
-    
+<canvas id="c"></canvas>
+
 
 <script>
-    const $ = s=>document.querySelector(s);
+    const $ = s => document.querySelector(s);
     const canvas = $("#c");
     const glsl = SwissGL(canvas);
     const gui = new dat.GUI();
-    
-    const CHN=16, C4=CHN/4, S4=3;
+
+    const CHN = 16, C4 = CHN / 4, S4 = 3;
     let models, model;
     let nca_grid, siren_grid;
 
@@ -35,66 +42,97 @@
         visMode: 0,
         heightScale: 0.1,
         showWireframe: false,
-        zoom:1.0,
-        geom:0,
+        zoom: 0.0,
+        geom: 0,
     }
-    gui.add(uniforms, 'visMode', {'rgb':0, 'normal':1, 'height':2, 
-                                  'ao':3, 'roughness':4});
-    gui.add(uniforms, 'geom', {'plane':0, 'torus':1});
+
+    const camera = {
+        theta: 45.0,
+        phi: 0.0,
+        distance: 2.0,
+        fov: 60.0,
+        znear: 0.001,
+        zfar: 100.0,
+        aspect: 1.0,
+        up: [0, 0, 1],
+        look_at: [0, 0, 0],
+    }
+    const camera_uniforms = {
+        camera_position: null,
+        view: null,
+        projection: null,
+    }
+
+    gui.add(uniforms, 'visMode', {
+        'rgb': 0, 'albedo': 1, 'normal': 2, 'height': 3,
+        'ao': 4, 'roughness': 5
+    });
+    gui.add(uniforms, 'geom', {'plane': 0, 'torus': 1});
     gui.add(uniforms, 'heightScale', 0.0, 0.5);
-    gui.add(uniforms, 'zoom', 1.0, 8.0);
+    gui.add(uniforms, 'zoom', 0.0, 3.0).onChange(() => {
+        set_camera();
+    });
     gui.add(uniforms, 'showWireframe');
     gui.add(params, 'runModel');
     gui.add(params, 'relativeScale', 1, 8, 1).onChange(updateSiren);
 
-    document.addEventListener('keydown', e=>{
-        if (e.key == 'r') {reset();}
+    document.addEventListener('keydown', e => {
+        if (e.key == 'r') {
+            reset();
+        }
     });
 
     async function init() {
         const response = await fetch('data/siren_nca.json');
         models = await response.json();
         for (const name in models)
-        for (const k in models[name]) {
-            const src = models[name][k];
-            src.data = new Float32Array(
-                Uint8Array.from(atob(src.data64), c=>c.charCodeAt(0)).buffer);
-            delete src.data64;
-        }
-        gui.add(params, 'model', Object.keys(models)).onChange(name=>{
+            for (const k in models[name]) {
+                const src = models[name][k];
+                src.data = new Float32Array(
+                    Uint8Array.from(atob(src.data64), c => c.charCodeAt(0)).buffer);
+                delete src.data64;
+            }
+        gui.add(params, 'model', Object.keys(models)).onChange(name => {
             model = load_model(name);
         });
         model = load_model(params.model);
         reset();
+        set_camera();
         frame();
     }
 
     function load_model(name) {
         const src = models[name];
         // init NCA
-        const [ch,ci]=src['nca.w1.weight'].shape, co=src['nca.w2.weight.T'].shape[1];
-        console.assert(co==CHN)
+        const [ch, ci] = src['nca.w1.weight'].shape, co = src['nca.w2.weight.T'].shape[1];
+        console.assert(co == CHN)
         const nca = {
-            w1: glsl({}, {size:[ci/4,ch], format:'rgba32f',
-                data:src['nca.w1.weight'].data, tag:'w1'}),
-            b1: glsl({}, {size:[1,ch], format:'r32f', 
-                data:src['nca.w1.bias'].data, tag:'b1'}),
-            w2t: glsl({}, {size:[co/4,ch], format:'rgba32f', 
-                data:src['nca.w2.weight.T'].data, tag:'w2t'}),
+            w1: glsl({}, {
+                size: [ci / 4, ch], format: 'rgba32f',
+                data: src['nca.w1.weight'].data, tag: 'w1'
+            }),
+            b1: glsl({}, {
+                size: [1, ch], format: 'r32f',
+                data: src['nca.w1.bias'].data, tag: 'b1'
+            }),
+            w2t: glsl({}, {
+                size: [co / 4, ch], format: 'rgba32f',
+                data: src['nca.w2.weight.T'].data, tag: 'w2t'
+            }),
         };
 
         // init Siren
         const sirenLayerN = 4;
         const inc = [`const int C4 = ${C4}; const int D4=32/4;`];
         const siren = {};
-        for (let i=0; i<sirenLayerN; ++i) {
-            const last = i == sirenLayerN-1;
+        for (let i = 0; i < sirenLayerN; ++i) {
+            const last = i == sirenLayerN - 1;
             const s = `siren.net.${i}` + (last ? '' : '.linear');
-            const weight = src[s+'.weight'];
-            const bias = src[s+'.bias'];
+            const weight = src[s + '.weight'];
+            const bias = src[s + '.bias'];
             const [no, ni] = weight.shape;
             inc.push(`
-                uniform vec4 W${i}[${no*ni/4}];
+                uniform vec4 W${i}[${no * ni / 4}];
                 uniform float B${i}[${no}];
                 void run_layer${i}(in vec4 src[D4], out vec4 dst[D4]) {
                     const int no=${no}, ni=${ni};
@@ -107,13 +145,31 @@
                         dst[i/4][i%4] = ${last} ? a : sin(a*10.0);
                     }
                 }`);
-            siren['W'+i] = weight.data;
-            siren['B'+i] = bias.data;
+            siren['W' + i] = weight.data;
+            siren['B' + i] = bias.data;
         }
         siren['Inc'] = inc.join('\n');
         return {nca, siren};
     }
+
     init();
+
+    function set_camera() {
+        const {theta, phi, distance, fov, znear, zfar, aspect} = camera;
+        const zoom = uniforms.zoom;
+
+        camera_uniforms.camera_position = [
+            distance * Math.cos(theta * Math.PI / 180) * Math.cos(phi * Math.PI / 180) / Math.pow(2., zoom),
+            distance * Math.cos(theta * Math.PI / 180) * Math.sin(phi * Math.PI / 180) / Math.pow(2., zoom),
+            distance * Math.sin(theta * Math.PI / 180) / Math.pow(2., zoom)
+        ];
+
+        camera_uniforms.view = m4.inverse(m4.lookAt(camera_uniforms.camera_position, camera.look_at, camera.up));
+        camera_uniforms.projection = m4.perspective(fov * Math.PI / 180, aspect, znear, zfar);
+    }
+
+
+
 
     function frame(time) {
         glsl.adjustCanvas();
@@ -122,9 +178,11 @@
             step();
             updateSiren();
         }
-        glsl({T:siren_grid.linear, Mesh:[512, 512], ...uniforms, Aspect:'fit',
-            time, perspective:0.5, DepthTest:1, MeshMode:1, VP:`
+        glsl({
+            T: siren_grid.linear, Mesh: [512, 512], ...uniforms, ...camera_uniforms, Aspect: 'fit',
+            time, perspective: 0.5, DepthTest: 1, MeshMode: 1, VP: `
             float height = T(UV,0).a;
+            varying vec3 v_position;
             VPos = vec4(XY,0,1);
             float scaledHeight = height*heightScale;
             if (geom==0.0) {
@@ -133,43 +191,117 @@
                 VPos.xyz = torus(UV, 0.7, 0.2+scaledHeight);
             }
             VPos.xy *= rot2(time*0.1);
-            VPos.xyz *= zoom;
-            VPos.yz *= rot2(0.8);
-            VPos.zw = vec2(-VPos.z*0.01, 1.0-VPos.z*perspective);
-            `, FP:`
-            vec4 v0=T(UV,0), v1=T(UV,1), v2=T(UV,2);
-            vec3 rgb = v0.rgb;
-            float height = v0.a;
-            float roughness = v1.x;
-            float ao = v1.y;
-            vec3 normal = vec3(v1.zw, v2.x);
-            FOut = vec4(rgb, 1.0);
-            if (visMode==1.0) {
-                FOut.rgb = normal;
-            } else if (visMode==2.0) {
-                FOut.rgb = vec3(height);
-            } else if (visMode==3.0) {
-                FOut.rgb = vec3(ao);
-            } else if (visMode==4.0) {
-                FOut.rgb = vec3(roughness);
+            v_position = VPos.xyz;
+            VPos = projection * view * VPos;
+            `, FP: `
+            vec3 fresnelSchlick(float cosTheta, vec3 F0) {
+                return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
             }
-            if (showWireframe) {
-                FOut.rgb = FOut.rgb + wireframe()*0.2;
+
+            float DistributionGGX(vec3 N, vec3 H, float roughness) {
+                float a = roughness*roughness;
+                // float a = roughness;
+                float a2     = a*a;
+                float NdotH  = max(dot(N, H), 0.0);
+                float NdotH2 = NdotH*NdotH;
+                float num   = a2;
+                float denom = (NdotH2 * (a2 - 1.0) + 1.0);
+                denom = PI * denom * denom;
+                return num / denom;
             }
-        `});
+
+            float GeometrySchlickGGX(float NdotV, float roughness) {
+                float r = (roughness + 1.0);
+                float k = (r*r) / 8.0;
+
+                float num   = NdotV;
+                float denom = NdotV * (1.0 - k) + k;
+                return num / denom;
+            }
+            float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
+                float NdotV = max(dot(N, V), 0.0);
+                float NdotL = max(dot(N, L), 0.0);
+                float ggx2  = GeometrySchlickGGX(NdotV, roughness);
+                float ggx1  = GeometrySchlickGGX(NdotL, roughness);
+                return ggx1 * ggx2;
+            }
+
+            void fragment() {
+                vec3 point_light = vec3(7.0);
+                vec3 ambient_light = vec3(0.25);
+                vec4 v0=T(UV,0), v1=T(UV,1), v2=T(UV,2);
+                vec3 albedo = v0.rgb;
+                float height = v0.a;
+                float roughness = v1.x;
+                float ao = v1.y;
+                vec3 normal = vec3(v1.zw, v2.x);
+
+                if (visMode == 1.0) {
+                    FOut = vec4(albedo, 1.0);
+                } else if (visMode==2.0) {
+                    FOut.rgb = normal;
+                } else if (visMode==3.0) {
+                    FOut.rgb = vec3(height);
+                } else if (visMode==4.0) {
+                    FOut.rgb = vec3(ao);
+                } else if (visMode==5.0) {
+                    FOut.rgb = vec3(roughness);
+                } else {
+                    vec3 N = normalize(normal - 0.5);
+                    // vec3 N = normalize(vec3(0, 0, 1));
+                    vec3 V = normalize(camera_position - v_position);
+                    vec3 light_position = vec3(0, 0, 1) * 1.5;
+                    vec3 L = normalize(light_position - v_position);
+                    vec3 H = normalize(V + L);
+
+                    float distance = length(light_position - v_position);
+                    float attenuation = 1.0 / (distance * distance);
+                    vec3 radiance = point_light * attenuation;
+
+                    vec3 F0 = vec3(0.04);
+                    float metallic = 0.0;
+                    F0 = mix(F0, albedo, metallic);
+
+                    float NDF = DistributionGGX(N, H, roughness);
+                    float G = GeometrySmith(N, V, L, roughness);
+                    vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+
+                    vec3 kS = F;
+                    vec3 kD = vec3(1.0) - kS;
+                    kD *= 1.0 - metallic;
+
+                    vec3 numerator = NDF * G * F;
+                    float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+                    vec3 specular = numerator / denominator;
+
+                    float NdotL = max(dot(N, L), 0.0);
+                    vec3 Lo = (kD * albedo / PI + specular) * radiance * NdotL;
+
+                    FOut.rgb = albedo * ao * ambient_light + Lo;
+
+                }
+                if (showWireframe) {
+                    FOut.rgb = FOut.rgb + wireframe()*0.2;
+                }
+            }
+        `
+        });
 
         requestAnimationFrame(frame);
     }
 
     function reset() {
-        nca_grid = glsl({seed:42, FP:`
+        nca_grid = glsl({
+            seed: 42, FP: `
             FOut = FOut1 = FOut2 = FOut3 = vec4(0);
-        `}, {size:[128, 128], layern:C4, format:'rgba16f', story:2, tag:'grid'});
+        `
+        }, {size: [128, 128], layern: C4, format: 'rgba16f', story: 2, tag: 'grid'});
     }
 
     function step() {
         const {nca} = model;
-        glsl({...nca, seed:Math.random()*26321, FP:`
+        glsl({
+            ...nca, seed: Math.random() * 26321, FP: `
             const int C4 = ${C4};
             const mat3 Kx = mat3(-1,-2,-1, 0,0,0, 1,2,1);
             const mat3 Ky = mat3(-1,0,1, -2,0,2, -1,0,1);
@@ -207,14 +339,16 @@
                 }
                 FOut = upd[0]; FOut1 = upd[1]; FOut2 = upd[2]; FOut3 = upd[3];
             }
-        `}, nca_grid);
+        `
+        }, nca_grid);
     }
 
     function updateSiren() {
         const {siren} = model;
         const scale = params.relativeScale;
         const [w, h] = nca_grid.size;
-        siren_grid = glsl({nca_grid:nca_grid[0].linear, ...siren, FP:`
+        siren_grid = glsl({
+            nca_grid: nca_grid[0].linear, ...siren, FP: `
             vec4 A[D4], B[D4];
             vec2 sz = vec2(nca_grid_size().xy);
             vec2 fetch_uv = UV+0.5/sz;
@@ -227,11 +361,14 @@
             run_layer0(A, B); run_layer1(B, A);
             run_layer2(A, B); run_layer3(B, A);
             FOut = A[0]; FOut1 = A[1]; FOut2 = A[2];
-        `}, {size:[w*scale, h*scale], 
-            format:'rgba16f', layern:S4, tag:'siren'})
+        `
+        }, {
+            size: [w * scale, h * scale],
+            format: 'rgba16f', layern: S4, tag: 'siren'
+        })
     }
 
 </script>
-    
+
 </body>
 </html>
