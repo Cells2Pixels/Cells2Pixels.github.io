@@ -70,8 +70,8 @@ window.onload = function () {
 };
 
 function tab_gallery_click(idx) {
-	const leftImage1 = `data/images/lppn_nca/${idx}_nca.png`;
-	const rightImage1 = `data/images/lppn_nca/${idx}_lppn.png`;
+	const leftImage1 = `data/images/lppn_nca/${idx}_nca.gif`;
+	const rightImage1 = `data/images/lppn_nca/${idx}_lppn.gif`;
 
 	document.getElementById("juxtapose-embed-1").innerHTML = "";
 	// document.getElementById("juxtapose-embed-2").innerHTML = "";
