@@ -17,8 +17,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cells2Pixels PBR Demo</title>
-    <script src="swissgl.js"></script>
-    <script src="dat.gui.min.js"></script>
+    <script src="../swissgl.js"></script>
+    <script src="../dat.gui.min.js"></script>
     <script src="https://webgl2fundamentals.org/webgl/resources/m4.js"></script>
     <style>
         body {
@@ -61,7 +61,7 @@
 
     const camera = {
         theta: 45.0,
-        phi: 0.0,
+        phi: 30.0,
         distance: 2.0,
         fov: 60.0,
         znear: 0.001,
@@ -75,6 +75,8 @@
         view: null,
         projection: null,
     }
+    let last_cursor_style = 'default';
+    let prevPos = [0, 0];
 
     gui.add(uniforms, 'visMode', {
         'rgb': 0, 'albedo': 1, 'normal': 2, 'height': 3,
@@ -83,20 +85,144 @@
     gui.add(uniforms, 'geom', {'plane': 0, 'torus': 1});
     gui.add(uniforms, 'heightScale', 0.0, 0.5);
     gui.add(uniforms, 'zoom', 0.0, 3.0).onChange(() => {
-        set_camera();
+        reset_camera();
     });
     gui.add(uniforms, 'showWireframe');
     gui.add(params, 'runModel');
     gui.add(params, 'relativeScale', 1, 8, 1).onChange(updateSiren);
 
-    document.addEventListener('keydown', e => {
-        if (e.key == 'r') {
-            reset();
+    function init_event_listeners() {
+        document.addEventListener('keydown', e => {
+            if (e.key === 'r') {
+                reset();
+            }
+            if (e.key === "Shift") {
+                if (canvas.style.cursor != "grabbing") {
+                    canvas.style.cursor = "grab";
+                    last_cursor_style = canvas.style.cursor;
+                }
+            }
+        });
+        document.addEventListener("keyup", e => {
+            if (e.key === 'Shift') {
+                canvas.style.cursor = "default";
+                last_cursor_style = canvas.style.cursor;
+            }
+        });
+
+        canvas.onmousedown = e => {
+            e.preventDefault();
+            // left click
+            if (e.buttons == 1) {
+                if (e.shiftKey) {
+                    canvas.style.cursor = "grabbing";
+                } else {
+                    canvas.style.cursor = 'pointer';
+                }
+                click(getMousePos(e), e, true);
+            }
         }
-    });
+        canvas.onmousemove = e => {
+            e.preventDefault();
+            if (e.buttons == 1) {
+                click(getMousePos(e), e, false);
+            }
+        }
+        canvas.onmouseup = e => {
+            e.preventDefault();
+            canvas.style.cursor = last_cursor_style;
+        }
+
+        canvas.addEventListener("touchstart", e => {
+            e.preventDefault();
+            click(getTouchPos(e.changedTouches[0]), e, true);
+        });
+        canvas.addEventListener("touchmove", e => {
+            e.preventDefault();
+            for (const t of e.touches) {
+                click(getTouchPos(t), e, false);
+            }
+        });
+
+    }
+
+    function getMousePos(e) {
+        const gridX = e.offsetX / canvas.clientWidth;
+        const gridY = e.offsetY / canvas.clientHeight;
+        return [gridX, gridY];
+    }
+
+    function getTouchPos(touch) {
+        const rect = canvas.getBoundingClientRect();
+        const gridX = (touch.clientX - rect.left) / canvas.clientWidth;
+        const gridY = (touch.clientY - rect.top) / canvas.clientHeight;
+        return [gridX, gridY];
+    }
+
+    function click(pos, e, first_touch = false) {
+        const [x, y] = pos;
+        const [px, py] = prevPos;
+
+        if (e.shiftKey) {
+
+            let delta_phi = 0.0;
+            let delta_theta = 0.0;
+
+            if (!first_touch) {
+                delta_phi = -(x - px) * 4.0;
+                delta_theta = (y - py) * 4.0;
+            }
+            rotate_camera(delta_phi, delta_theta);
+            prevPos = pos;
+        } else {
+            // Adjust with the aspect ratio
+            const c = Math.min(canvas.clientWidth, canvas.clientHeight);
+            const adjustedX = (x * 2.0 - 1.0) * (canvas.clientWidth / c);
+            const adjustedY = -(y * 2.0 - 1.0) * (canvas.clientHeight / c);
+            brush(adjustedX, adjustedY);
+            prevPos = pos;
+        }
+
+
+    }
+
+    function reset_camera() {
+        const {theta, phi, distance, fov, znear, zfar, aspect} = camera;
+        const zoom = uniforms.zoom;
+
+        camera_uniforms.camera_position = [
+            distance * Math.cos(theta * Math.PI / 180) * Math.cos(phi * Math.PI / 180) / Math.pow(2., zoom),
+            distance * Math.cos(theta * Math.PI / 180) * Math.sin(phi * Math.PI / 180) / Math.pow(2., zoom),
+            distance * Math.sin(theta * Math.PI / 180) / Math.pow(2., zoom)
+        ];
+
+        camera_uniforms.view = m4.inverse(m4.lookAt(camera_uniforms.camera_position, camera.look_at, camera.up));
+        camera_uniforms.projection = m4.perspective(fov * Math.PI / 180, aspect, znear, zfar);
+    }
+
+    function rotate_camera(delta_phi, delta_theta) {
+        let up = m4.normalize(camera.up);
+        const {theta, phi, distance, fov, znear, zfar, aspect, look_at} = camera;
+        const zoom = uniforms.zoom;
+        let y_camera = m4.normalize(m4.subtractVectors(look_at, camera_uniforms.camera_position));
+
+        let z_camera = m4.normalize(m4.subtractVectors(up, m4.scaleVector(up, m4.dot(y_camera, up))));
+
+        let x_camera = m4.normalize(m4.cross(y_camera, z_camera));
+
+        camera_uniforms.camera_position = m4.addVectors(camera_uniforms.camera_position, m4.scaleVector(x_camera, delta_phi));
+        camera_uniforms.camera_position = m4.addVectors(camera_uniforms.camera_position, m4.scaleVector(z_camera, delta_theta));
+        camera_uniforms.camera_position = m4.scaleVector(m4.normalize(camera_uniforms.camera_position), distance / Math.pow(2., zoom));
+
+        camera_uniforms.view = m4.inverse(m4.lookAt(camera_uniforms.camera_position, look_at, up));
+        camera_uniforms.projection = m4.perspective(fov * Math.PI / 180, aspect, znear, zfar);
+    }
+
+    init_event_listeners();
+
 
     async function init() {
-        const response = await fetch('data/siren_nca.json');
+        const response = await fetch('./pbr_nca.json');
         models = await response.json();
         for (const name in models)
             for (const k in models[name]) {
@@ -110,9 +236,11 @@
         });
         model = load_model(params.model);
         reset();
-        set_camera();
+        reset_camera();
         frame();
     }
+
+    init();
 
     function load_model(name) {
         const src = models[name];
@@ -165,33 +293,17 @@
         return {nca, siren};
     }
 
-    init();
-
-    function set_camera() {
-        const {theta, phi, distance, fov, znear, zfar, aspect} = camera;
-        const zoom = uniforms.zoom;
-
-        camera_uniforms.camera_position = [
-            distance * Math.cos(theta * Math.PI / 180) * Math.cos(phi * Math.PI / 180) / Math.pow(2., zoom),
-            distance * Math.cos(theta * Math.PI / 180) * Math.sin(phi * Math.PI / 180) / Math.pow(2., zoom),
-            distance * Math.sin(theta * Math.PI / 180) / Math.pow(2., zoom)
-        ];
-
-        camera_uniforms.view = m4.inverse(m4.lookAt(camera_uniforms.camera_position, camera.look_at, camera.up));
-        camera_uniforms.projection = m4.perspective(fov * Math.PI / 180, aspect, znear, zfar);
-    }
-
 
     function frame(time) {
         glsl.adjustCanvas();
         time /= 1000.0;
         if (params.runModel) {
             step();
-            updateSiren();
         }
+        updateSiren();
         glsl({
             T: siren_grid.linear, Mesh: [512, 512], ...uniforms, ...camera_uniforms, Aspect: 'fit',
-            time, perspective: 0.5, DepthTest: 1, MeshMode: 1, VP: `
+            time, DepthTest: 1, MeshMode: 1, VP: `
             float height = T(UV,0).a;
             varying vec3 v_position;
             VPos = vec4(XY,0,1);
@@ -201,7 +313,7 @@
             } else {
                 VPos.xyz = torus(UV, 0.7, 0.2+scaledHeight);
             }
-            VPos.xy *= rot2(time*0.1);
+            // VPos.xy *= rot2(time*0.1);
             v_position = VPos.xyz;
             VPos = projection * view * VPos;
             `, FP: `
@@ -307,6 +419,24 @@
             FOut = FOut1 = FOut2 = FOut3 = vec4(0);
         `
         }, {size: [128, 128], layern: C4, format: 'rgba16f', story: 2, tag: 'grid'});
+    }
+
+    function brush(x, y) {
+        const {nca} = model;
+        glsl({
+            ...nca, ...camera_uniforms, x_pos: x, y_pos: y, FP: `
+            vec4 vpos = vec4(XY.x, XY.y, 0.0, 1.0);
+            vpos = projection * view * vpos;
+            vpos.xy /= vpos.w;
+            float dist = length(vpos.xy - vec2(x_pos, y_pos));
+            if (dist < 0.25) {
+                FOut = FOut1 = FOut2 = FOut3 = vec4(0.0);
+            } else {
+                discard;
+            }
+        `
+        }, nca_grid[0]);
+
     }
 
     function step() {
