@@ -419,6 +419,7 @@
             FOut = FOut1 = FOut2 = FOut3 = vec4(0);
         `
         }, {size: [128, 128], layern: C4, format: 'rgba16f', story: 2, tag: 'grid'});
+        // }, {size: [64, 64], layern: C4, format: 'rgba16f', story: 2, tag: 'grid'});
     }
 
     function brush(x, y) {
@@ -489,10 +490,11 @@
         const scale = params.relativeScale;
         const [w, h] = nca_grid.size;
         siren_grid = glsl({
-            nca_grid: nca_grid[0].linear, ...siren, FP: `
+            nca_grid: nca_grid[0].linear, ...siren, scale: scale, FP: `
             vec4 A[D4], B[D4];
             vec2 sz = vec2(nca_grid_size().xy);
-            vec2 fetch_uv = UV+0.5/sz;
+            // vec2 fetch_uv = UV+0.5/sz/scale;
+            vec2 fetch_uv = UV;
             vec2 patch_coord = (fract(UV*sz)-0.5)*2.0;
             A[0].yx = patch_coord;
             for (int i=0; i<C4; ++i) {

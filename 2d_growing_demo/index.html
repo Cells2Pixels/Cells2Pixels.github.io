@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-KTP0F99KQP"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+
+        function gtag() {
+            dataLayer.push(arguments);
+        }
+
+        gtag('js', new Date());
+
+        gtag('config', 'G-KTP0F99KQP');
+    </script>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cells2Pixels PBR Demo</title>
+    <script src="../swissgl.js"></script>
+    <script src="../dat.gui.min.js"></script>
+    <script src="https://webgl2fundamentals.org/webgl/resources/m4.js"></script>
+    <style>
+        body {
+            background-color: black;
+        }
+
+        canvas {
+            width: 100vw;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+
+<script>
+    const $ = s => document.querySelector(s);
+    const canvas = $("#c");
+    const glsl = SwissGL(canvas);
+    const gui = new dat.GUI();
+
+    const CHN = 32, C4 = CHN / 4, D4 = 64 / 4;
+    const H = 128, W = 128; // Size of the NCA grid
+    // const CHN = 16, C4 = CHN / 4, D4 = 32 / 4, S4 = 3;
+    let models, model;
+    let nca_grid, siren_grid;
+
+
+    const params = {
+        models_path: './growing_nca.json',
+        // models_path: './pbr_nca.json',
+        model: 'Chameleon',
+        // model: 'Alex',
+        // model: 'Sci-fi_Wall_010',
+        runModel: true,
+        relativeScale: 8,
+    };
+
+    let last_cursor_style = 'default';
+    let prevPos = [0, 0];
+
+    gui.add(params, 'runModel');
+    gui.add(params, 'relativeScale', 1, 8, 1).onChange(updateSiren);
+
+    function init_event_listeners() {
+        document.addEventListener('keydown', e => {
+            if (e.key === 'r') {
+                reset();
+            }
+            if (e.key === "Shift") {
+                if (canvas.style.cursor != "pointer") {
+                    canvas.style.cursor = "pointer";
+                    last_cursor_style = canvas.style.cursor;
+                }
+            }
+        });
+        document.addEventListener("keyup", e => {
+            if (e.key === 'Shift') {
+                canvas.style.cursor = "default";
+                last_cursor_style = canvas.style.cursor;
+            }
+        });
+
+        canvas.onmousedown = e => {
+            e.preventDefault();
+            // left click
+            if (e.buttons == 1) {
+                if (e.shiftKey) {
+                    canvas.style.cursor = "pointer";
+                } else {
+                    canvas.style.cursor = 'grabbing';
+                }
+                click(getMousePos(e), e, true);
+            }
+        }
+        canvas.onmousemove = e => {
+            e.preventDefault();
+            if (e.buttons == 1) {
+                click(getMousePos(e), e, false);
+            }
+        }
+        canvas.onmouseup = e => {
+            e.preventDefault();
+            canvas.style.cursor = last_cursor_style;
+        }
+
+        canvas.addEventListener("touchstart", e => {
+            e.preventDefault();
+            click(getTouchPos(e.changedTouches[0]), e, true);
+        });
+        canvas.addEventListener("touchmove", e => {
+            e.preventDefault();
+            for (const t of e.touches) {
+                click(getTouchPos(t), e, false);
+            }
+        });
+
+    }
+
+    function getMousePos(e) {
+        const gridX = e.offsetX / canvas.clientWidth;
+        const gridY = e.offsetY / canvas.clientHeight;
+        return [gridX, gridY];
+    }
+
+    function getTouchPos(touch) {
+        const rect = canvas.getBoundingClientRect();
+        const gridX = (touch.clientX - rect.left) / canvas.clientWidth;
+        const gridY = (touch.clientY - rect.top) / canvas.clientHeight;
+        return [gridX, gridY];
+    }
+
+    function click(pos, e, first_touch = false) {
+        const [x, y] = pos;
+        const [px, py] = prevPos;
+        const c = Math.min(canvas.clientWidth, canvas.clientHeight);
+        const adjustedX = (x * 2.0 - 1.0) * (canvas.clientWidth / c);
+        const adjustedY = (y * 2.0 - 1.0) * (canvas.clientHeight / c);
+
+        if (e.shiftKey) {
+            if (first_touch) brush(adjustedX, adjustedY, first_touch);
+        } else {
+            brush(adjustedX, adjustedY, false);
+        }
+
+        prevPos = pos;
+
+    }
+
+
+    init_event_listeners();
+
+
+    async function init() {
+        const response = await fetch(params.models_path);
+        // const response = await fetch('./growing_nca.json');
+        models = await response.json();
+        for (const name in models)
+            for (const k in models[name]) {
+                const src = models[name][k];
+                src.data = new Float32Array(
+                    Uint8Array.from(atob(src.data64), c => c.charCodeAt(0)).buffer);
+                delete src.data64;
+            }
+        gui.add(params, 'model', Object.keys(models)).onChange(name => {
+            model = load_model(name);
+        });
+        model = load_model(params.model);
+        reset();
+        frame();
+    }
+
+    init();
+
+    function load_model(name) {
+        const src = models[name];
+        // init NCA
+        const [ch, ci] = src['nca.w1.weight'].shape, co = src['nca.w2.weight.T'].shape[1];
+        // alert(`Model ${name} loaded: ${ch} channels, ${ci} inputs, ${co} outputs`);
+        // ch256 ci128 co32
+        console.assert(co == CHN)
+        const nca = {
+            w1: glsl({}, {
+                size: [ci / 4, ch], format: 'rgba32f',
+                data: src['nca.w1.weight'].data, tag: 'w1'
+            }),
+            b1: glsl({}, {
+                size: [1, ch], format: 'r32f',
+                data: src['nca.w1.bias'].data, tag: 'b1'
+            }),
+            w2t: glsl({}, {
+                size: [co / 4, ch], format: 'rgba32f',
+                data: src['nca.w2.weight.T'].data, tag: 'w2t'
+            }),
+        };
+
+        // init Siren
+        const sirenLayerN = 4;
+        const inc = [`const int C4=${C4}; const int D4=${D4};`];
+        inc.push(`
+            float softplus(float x) {
+                return (x < 15.0) ? log(1.0 + exp(x)) : x;
+            }
+        `);
+        const siren = {};
+        for (let i = 0; i < sirenLayerN; ++i) {
+            const last = (i === sirenLayerN - 1);
+            const first = (i === 0);
+            const s = `siren.net.${i}` + (last ? '' : '.linear');
+            const weight = src[s + '.weight'];
+            const bias = src[s + '.bias'];
+            const [no, ni] = weight.shape;
+            // alert(`Siren layer ${i}: ${no} outputs, ${ni} inputs`);
+            siren[`w${i}s`] = glsl({}, {
+                size: [ni / 4, no], format: 'rgba32f',
+                data: weight.data, tag: `w${i}s`
+            });
+            siren[`b${i}s`] = glsl({}, {
+                size: [1, no], format: 'r32f',
+                data: bias.data, tag: `b${i}s`
+            });
+            inc.push(`
+            void run_layer${i}(in vec4 src[D4], out vec4 dst[D4]) {
+                const int no=${no}, ni=${ni};
+                for (int j=0; j<no; ++j) {
+                    // float a = B${i}[j];
+                    float a = b${i}s(ivec2(0, j)).x;
+                    # pragma unroll
+                    for (int k=0; k<ni/4; ++k) {
+                        // a += dot(src[k], W${i}[j*ni/4 + k]);
+                        a += dot(src[k], w${i}s(ivec2(k, j)));
+                    }
+                    dst[j/4][j%4] = ${last} ? a : (${first} ? softplus(a*10.0) : sin(a*10.0));
+                    // dst[j/4][j%4] = ${last} ? a : sin(a*10.0);
+                }
+            }`);
+        }
+        siren['Inc'] = inc.join('\n');
+        return {nca, siren};
+    }
+
+    function reset() {
+        nca_grid = glsl({
+            seed: 42, FP: `
+            FOut = vec4(0);
+            if (I.x == ${H}/2 && I.y == ${W}/2) {
+                FOut.w = 1.0;
+                FOut1 = FOut2 = FOut3 = vec4(1.0);
+                FOut4 = FOut5 = FOut6 = FOut7 = vec4(1.0);
+            } else {
+                FOut1 = FOut2 = FOut3 = vec4(0.0);
+                FOut4 = FOut5 = FOut6 = FOut7 = vec4(0.0);
+            }
+
+
+        `
+        }, {size: [H, W], layern: C4, format: 'rgba16f', story: 2, tag: 'grid'});
+    }
+
+    function brush(x, y, seed = false) {
+        const {nca} = model;
+        glsl({
+            ...nca, x_pos: x, y_pos: y, seed: seed, FP: `
+            float dist = length(XY.xy - vec2(x_pos, y_pos));
+            if (seed) {
+                ivec2 I_click = ivec2((x_pos*0.5+0.5) * float(ViewSize.x), (y_pos*0.5+0.5) * float(ViewSize.y));
+                if (I.x == I_click.x && I.y == I_click.y) {
+                    FOut = vec4(0.0, 0.0, 0.0, 1.0);
+                    FOut1 = FOut2 = FOut3 = FOut4 = FOut5 = FOut6 = FOut7 = vec4(1.0);
+                } else {
+                    discard;
+                }
+            } else if (dist < 0.25) {
+                FOut = FOut1 = FOut2 = FOut3 = vec4(0.0);
+                FOut4 = FOut5 = FOut6 = FOut7 = vec4(0.0);
+            } else {
+                discard;
+            }
+        `
+        }, nca_grid[0]);
+
+    }
+
+    function step() {
+        const {nca} = model;
+        glsl({
+            ...nca, seed: Math.random() * 26321, FP: `
+            const int C4 = ${C4};
+            const mat3 Kx = mat3(-1,-2,-1, 0,0,0, 1,2,1);
+            const mat3 Ky = mat3(-1,0,1, -2,0,2, -1,0,1);
+            const mat3 Klap = mat3(1,2,1, 2,-12,2, 1,2,1);
+
+            vec4 perc[C4*4], upd[C4];
+            
+            void neib(int x, int y) {
+                ivec2 p = (ivec2(I.x+x-1, I.y+y-1)+ViewSize)%ViewSize;
+                for (int i=0; i<C4; ++i) {
+                    vec4 v = Src(p,i);
+                    perc[C4+i]   += Kx[x][y]*v; 
+                    perc[C4*2+i] += Ky[x][y]*v;
+                    perc[C4*3+i] += Klap[x][y]*v;
+                }
+            }
+
+            float max_pool_alive() {
+                float max_alive = 0.0;
+                for (int x=-1; x < 2; ++x) {
+                    for (int y=-1; y < 2; ++y) {
+                        ivec2 p = (ivec2(I.x+x, I.y+y)+ViewSize)%ViewSize;
+                        max_alive = max(max_alive, Src(p, 0).w);
+                    }
+                }
+                return max_alive;
+            }
+
+            void set_all(vec4 x) {
+                FOut = FOut1 = FOut2 = FOut3 = x;
+                FOut4 = FOut5 = FOut6 = FOut7 = x;
+            }
+
+            void set_all_upd() {
+                FOut = upd[0]; FOut1 = upd[1]; FOut2 = upd[2]; FOut3 = upd[3];
+                FOut4 = upd[4]; FOut5 = upd[5]; FOut6 = upd[6]; FOut7 = upd[7];
+            }
+
+            void fragment() {
+                for (int i=0; i<C4; ++i) {
+                    upd[i] = perc[i] = Src(I,i);
+                    perc[i+C4*3] = Klap[1][1]*upd[i];
+                }
+                if (max_pool_alive() < 0.1) {
+                    set_all(vec4(0.0));
+                    return;
+                }
+                if (hash(ivec3(I,seed)).x<0.5) {
+                    neib(0,0); neib(0,1); neib(0,2);
+                    neib(1,0);            neib(1,2);
+                    neib(2,0); neib(2,1); neib(2,2);
+
+                    int ci = w1_size().x, ch = w1_size().y;
+                    for (int h=0; h<ch; ++h) {
+                        float y = b1(ivec2(0, h)).x;
+                        for (int i=0; i<ci; ++i) {y += dot(perc[i], w1(ivec2(i, h)));}
+                        if (y<=0.0) continue;
+                        for (int i=0; i<C4; ++i) {upd[i] += y*w2t(ivec2(i, h));}
+                    }
+                }
+                set_all_upd();
+            }
+        `
+        }, nca_grid);
+        glsl({
+            ...nca, seed: Math.random() * 26321, FP: `
+            const int C4 = ${C4};
+            float max_pool_alive() {
+                float max_alive = 0.0;
+                for (int x=-1; x < 2; ++x) {
+                    for (int y=-1; y < 2; ++y) {
+                        ivec2 p = (ivec2(I.x+x, I.y+y)+ViewSize)%ViewSize;
+                        max_alive = max(max_alive, Src(p, 0).w);
+                    }
+                }
+                return max_alive;
+            }
+
+            void set_all(vec4 x) {
+                FOut = FOut1 = FOut2 = FOut3 = x;
+                FOut4 = FOut5 = FOut6 = FOut7 = x;
+            }
+
+            void set_all_src() {
+                FOut = Src(I, 0); FOut1 = Src(I, 1); FOut2 = Src(I, 2); FOut3 = Src(I, 3);
+                FOut4 = Src(I, 4); FOut5 = Src(I, 5); FOut6 = Src(I, 6); FOut7 = Src(I, 7);
+            }
+
+            void fragment() {
+                if (max_pool_alive() < 0.1) {
+                    set_all(vec4(0.0));
+                    return;
+                }
+                set_all_src();
+            }
+        `
+        }, nca_grid);
+    }
+
+    function updateSiren() {
+        const {siren} = model;
+        const scale = params.relativeScale;
+        const [w, h] = nca_grid.size;
+        siren_grid = glsl({
+            nca_grid: nca_grid[0].linear, ...siren, scale: scale, FP: `
+            float max_pool_alive(vec2 xy, vec2 sz) {
+                float max_alive = 0.0;
+                for (int dx=-1; dx < 2; ++dx) {
+                    for (int dy=-1; dy < 2; ++dy) {
+                        vec2 xyp = xy + vec2(dx, dy) / sz / scale;
+                        max_alive = max(max_alive, nca_grid(xyp, 0).w);
+                    }
+                }
+                return max_alive;
+            }
+
+            void fragment() {
+                vec4 A[D4], B[D4];
+                vec2 sz = vec2(nca_grid_size().xy);
+                // vec2 fetch_uv = UV+0.0/sz/scale;
+                vec2 fetch_uv = UV;
+                float alive = max_pool_alive(fetch_uv, sz);
+                // float alive = nca_grid(fetch_uv, 0).w;
+                if (alive < 0.1) {
+                    FOut = vec4(0);
+                    return;
+                }
+
+                vec2 patch_coord = (fract(UV*sz)-0.5)*2.0;
+                A[0].yx = sin(PI * patch_coord);
+                A[0].wz = cos(PI * patch_coord);
+                for (int i=0; i<C4; ++i) {
+                    A[i + 1] = nca_grid(fetch_uv,i);
+                }
+                run_layer0(A, B);
+                run_layer1(B, A);
+                run_layer2(A, B);
+                run_layer3(B, A);
+                FOut = A[0];
+            }
+        `
+        }, {
+            size: [w * scale, h * scale],
+            format: 'rgba16f', layern: 1, tag: 'siren'
+        })
+    }
+
+    function frame(time) {
+        glsl.adjustCanvas();
+        time /= 1000.0;
+        if (params.runModel) {
+            step();
+        }
+        updateSiren();
+        glsl({
+            state: nca_grid[0].linear,
+            siren_grid: siren_grid.linear,
+            Aspect: 'fit',
+            FP: `
+
+
+            void fragment() {
+                vec2 uv = vec2(UV.x, 1.0 - UV.y);
+                vec4 rgba = siren_grid(uv, 0);
+                vec3 rgb = rgba.xyz * 1.0;
+                float alpha = rgba.w;
+                rgb = rgb * alpha + (1.0 - alpha) * 1.0;
+                FOut = vec4(rgb, 1.0) / 1.0;
+            }
+
+
+        `
+        });
+
+
+        requestAnimationFrame(frame);
+    }
+
+</script>
+
+</body>
+</html>
