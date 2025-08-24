@@ -56,12 +56,14 @@
         // model: 'Sci-fi_Wall_010',
         runModel: true,
         relativeScale: 8,
+        reset_upon_load: true,
     };
 
     let last_cursor_style = 'default';
     let prevPos = [0, 0];
 
     gui.add(params, 'runModel');
+    gui.add(params, 'reset_upon_load')
     gui.add(params, 'relativeScale', 1, 8, 1).onChange(updateSiren);
 
     function init_event_listeners() {
@@ -175,6 +177,10 @@
     init();
 
     function load_model(name) {
+        if (params.reset_upon_load) {
+            reset();
+        }
+
         const src = models[name];
         // init NCA
         const [ch, ci] = src['nca.w1.weight'].shape, co = src['nca.w2.weight.T'].shape[1];
@@ -232,8 +238,8 @@
                         // a += dot(src[k], W${i}[j*ni/4 + k]);
                         a += dot(src[k], w${i}s(ivec2(k, j)));
                     }
-                    dst[j/4][j%4] = ${last} ? a : (${first} ? softplus(a*10.0) : sin(a*10.0));
-                    // dst[j/4][j%4] = ${last} ? a : sin(a*10.0);
+                    // dst[j/4][j%4] = ${last} ? a : (${first} ? softplus(a*10.0) : sin(a*10.0));
+                    dst[j/4][j%4] = ${last} ? a : sin(a*10.0);
                 }
             }`);
         }
@@ -351,39 +357,39 @@
             }
         `
         }, nca_grid);
-        glsl({
-            ...nca, seed: Math.random() * 26321, FP: `
-            const int C4 = ${C4};
-            float max_pool_alive() {
-                float max_alive = 0.0;
-                for (int x=-1; x < 2; ++x) {
-                    for (int y=-1; y < 2; ++y) {
-                        ivec2 p = (ivec2(I.x+x, I.y+y)+ViewSize)%ViewSize;
-                        max_alive = max(max_alive, Src(p, 0).w);
-                    }
-                }
-                return max_alive;
-            }
-
-            void set_all(vec4 x) {
-                FOut = FOut1 = FOut2 = FOut3 = x;
-                FOut4 = FOut5 = FOut6 = FOut7 = x;
-            }
-
-            void set_all_src() {
-                FOut = Src(I, 0); FOut1 = Src(I, 1); FOut2 = Src(I, 2); FOut3 = Src(I, 3);
-                FOut4 = Src(I, 4); FOut5 = Src(I, 5); FOut6 = Src(I, 6); FOut7 = Src(I, 7);
-            }
-
-            void fragment() {
-                if (max_pool_alive() < 0.1) {
-                    set_all(vec4(0.0));
-                    return;
-                }
-                set_all_src();
-            }
-        `
-        }, nca_grid);
+        // glsl({
+        //     ...nca, seed: Math.random() * 26321, FP: `
+        //     const int C4 = ${C4};
+        //     float max_pool_alive() {
+        //         float max_alive = 0.0;
+        //         for (int x=-1; x < 2; ++x) {
+        //             for (int y=-1; y < 2; ++y) {
+        //                 ivec2 p = (ivec2(I.x+x, I.y+y)+ViewSize)%ViewSize;
+        //                 max_alive = max(max_alive, Src(p, 0).w);
+        //             }
+        //         }
+        //         return max_alive;
+        //     }
+        //
+        //     void set_all(vec4 x) {
+        //         FOut = FOut1 = FOut2 = FOut3 = x;
+        //         FOut4 = FOut5 = FOut6 = FOut7 = x;
+        //     }
+        //
+        //     void set_all_src() {
+        //         FOut = Src(I, 0); FOut1 = Src(I, 1); FOut2 = Src(I, 2); FOut3 = Src(I, 3);
+        //         FOut4 = Src(I, 4); FOut5 = Src(I, 5); FOut6 = Src(I, 6); FOut7 = Src(I, 7);
+        //     }
+        //
+        //     void fragment() {
+        //         if (max_pool_alive() < 0.1) {
+        //             set_all(vec4(0.0));
+        //             return;
+        //         }
+        //         set_all_src();
+        //     }
+        // `
+        // }, nca_grid);
     }
 
     function updateSiren() {
