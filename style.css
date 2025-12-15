@@ -637,3 +637,38 @@ d-figure > figure {
   top: 3px;
   background-color: #63a22f;
 }
+
+
+.icon-highlight{
+  position: relative;
+  display: inline-flex;        /* make it a “box” we can decorate */
+  align-items: center;
+  justify-content: center;
+  width: 2.2em;                /* adjust size if you want */
+  height: 2.2em;
+  border-radius: 999px;        /* circular ring */
+  isolation: isolate;
+}
+
+.icon-highlight::before{
+  content:"";
+  position:absolute;
+  inset:-4px;                  /* distance outside the icon */
+  border-radius: inherit;
+  padding: 2px;                /* ring thickness */
+  background: conic-gradient(
+    from 0deg,
+    #ff0033, #ff8a00, #ffd500, #00d1b2, #7a00ff, #ff0033
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  animation: spin 1.8s linear infinite;
+  z-index: -1;
+}
+
+@keyframes spin{
+  to { transform: rotate(360deg); }
+}
