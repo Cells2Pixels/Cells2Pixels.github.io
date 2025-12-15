@@ -639,36 +639,42 @@ d-figure > figure {
 }
 
 
-.icon-highlight{
+
+.highlight-wrap{
   position: relative;
-  display: inline-flex;        /* make it a “box” we can decorate */
-  align-items: center;
-  justify-content: center;
-  width: 2.2em;                /* adjust size if you want */
-  height: 2.2em;
-  border-radius: 999px;        /* circular ring */
+  display: inline-block;
+  border-radius: 999px;      /* match the rounded button feel */
   isolation: isolate;
 }
 
-.icon-highlight::before{
+/* animated border */
+.highlight-wrap::before{
   content:"";
   position:absolute;
-  inset:-4px;                  /* distance outside the icon */
+  inset: 1px;                /* how far outside the span */
   border-radius: inherit;
-  padding: 2px;                /* ring thickness */
-  background: conic-gradient(
-    from 0deg,
+  padding: 4px;              /* border thickness */
+
+  background: linear-gradient(
+    90deg,
     #ff0033, #ff8a00, #ffd500, #00d1b2, #7a00ff, #ff0033
   );
+  background-size: 300% 100%;
+  animation: phase 4s linear infinite;
+  animation-delay: var(--phase, 0s); /* <-- per element */
+
+  /* hollow center so it becomes just a border */
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
           mask-composite: exclude;
-  animation: spin 1.8s linear infinite;
-  z-index: -1;
+
+  z-index: 2;
+  pointer-events: none;
 }
 
-@keyframes spin{
-  to { transform: rotate(360deg); }
+@keyframes phase{
+  from { background-position:   0% 50%; }
+  to   { background-position: 300% 50%; }
 }
