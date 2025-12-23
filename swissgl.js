@@ -907,7 +907,7 @@ function drawQuads(self, params, target) {
 
 function SwissGL(canvas_gl) {
     const gl = canvas_gl.getContext ?
-        canvas_gl.getContext('webgl2', {alpha:false, antialias:true}) : canvas_gl;
+        canvas_gl.getContext('webgl2', {alpha: true, antialias:true}) : canvas_gl;
     gl.getExtension("EXT_color_buffer_float");
     gl.getExtension("OES_texture_float_linear");
     const ext = gl.getExtension("EXT_texture_filter_anisotropic")
@@ -922,12 +922,14 @@ function SwissGL(canvas_gl) {
     glsl.gl = gl;
     glsl.shaders = {};
     glsl.buffers = {};
+    glsl.animation_id = null;
     glsl.reset = ()=>{
         const freeProg = o=>(o instanceof WebGLProgram) ? gl.deleteProgram(o) : Object.values(o).forEach(freeProg);
         freeProg(glsl.shaders);
         Object.values(glsl.buffers).flat().forEach(target=>target.free());
         glsl.shaders = {};
         glsl.buffers = {};
+        cancelAnimationFrame(glsl.animation_id);
     };
     glsl.adjustCanvas = dpr=>{
         dpr = dpr || self.devicePixelRatio;
@@ -941,9 +943,9 @@ function SwissGL(canvas_gl) {
     glsl.loop = callback=>{
         const frameFunc = time=>{
             const res = callback({glsl, time:time/1000.0});
-            if (res != 'stop') requestAnimationFrame(frameFunc);
+            if (res != 'stop') glsl.animation_id = requestAnimationFrame(frameFunc);
         };
-        requestAnimationFrame(frameFunc);
+        glsl.animation_id = requestAnimationFrame(frameFunc);
     };
     return glsl;
 }

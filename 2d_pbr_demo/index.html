@@ -222,7 +222,7 @@
 
 
     async function init() {
-        const response = await fetch('./pbr_nca.json');
+        const response = await fetch('./models.json');
         models = await response.json();
         for (const name in models)
             for (const k in models[name]) {
@@ -268,7 +268,7 @@
         const siren = {};
         for (let i = 0; i < sirenLayerN; ++i) {
             const last = i == sirenLayerN - 1;
-            const s = `siren.net.${i}` + (last ? '' : '.linear');
+            const s = `lppn.net.${i}` + (last ? '' : '.linear');
             const weight = src[s + '.weight'];
             const bias = src[s + '.bias'];
             const [no, ni] = weight.shape;

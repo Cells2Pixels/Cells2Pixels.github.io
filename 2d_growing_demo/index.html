@@ -49,7 +49,7 @@
 
 
     const params = {
-        models_path: './growing_nca.json',
+        models_path: './models.json',
         // models_path: './pbr_nca.json',
         model: 'Chameleon',
         // model: 'Alex',
@@ -214,16 +214,11 @@
         // init Siren
         const sirenLayerN = 4;
         const inc = [`const int C4=${C4}; const int D4=${D4};`];
-        inc.push(`
-            float softplus(float x) {
-                return (x < 15.0) ? log(1.0 + exp(x)) : x;
-            }
-        `);
         const siren = {};
         for (let i = 0; i < sirenLayerN; ++i) {
             const last = (i === sirenLayerN - 1);
             const first = (i === 0);
-            const s = `siren.net.${i}` + (last ? '' : '.linear');
+            const s = `lppn.net.${i}` + (last ? '' : '.linear');
             const weight = src[s + '.weight'];
             const bias = src[s + '.bias'];
             const [no, ni] = weight.shape;
