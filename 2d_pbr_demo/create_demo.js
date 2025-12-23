@@ -358,9 +358,9 @@ export function createDemoPBR(glsl, divId) {
                 delete src.data64;
             }
 
-            let media_path = "./2d_pbr_demo/target_images/" + name.toLowerCase() + "/rendered_white.jpg"
+            let media_path = "./2d_pbr_demo/target_images/" + name + "/rendered_white.jpg"
             console.log(media_path);
-            media_path = media_path.replace(' + autocorr', '');
+            media_path = media_path.replace(' + AutoCorr', '');
 
 
             const target_img = document.createElement('div');
