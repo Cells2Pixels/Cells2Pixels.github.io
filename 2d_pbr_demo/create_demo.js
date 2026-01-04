@@ -282,7 +282,7 @@ export function createDemoPBR(glsl, divId) {
         const [x, y] = pos;
         const [px, py] = prevPos;
 
-        if (e.shiftKey) {
+        if (e.shiftKey || !uniforms.brush_enabled) {
 
             let delta_phi = 0.0;
             let delta_theta = 0.0;
@@ -477,12 +477,12 @@ export function createDemoPBR(glsl, divId) {
     function brush(x, y) {
         const { nca } = model;
         glsl({
-            ...nca, ...camera_uniforms, x_pos: x, y_pos: y, FP: `
+            ...nca, ...camera_uniforms, ...uniforms, x_pos: x, y_pos: y, FP: `
             vec4 vpos = vec4(XY.x, XY.y, 0.0, 1.0);
             vpos = projection * view * vpos;
             vpos.xy /= vpos.w;
             float dist = length(vpos.xy - vec2(x_pos, y_pos));
-            if (dist < 0.25) {
+            if (dist < 0.15 * brush_size) {
                 FOut = FOut1 = FOut2 = FOut3 = vec4(0.0);
             } else {
                 discard;
