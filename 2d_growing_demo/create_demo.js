@@ -29,7 +29,7 @@ export function createDemoGrowing(glsl, divId) {
     };
 
     const uniforms = {
-        viewR: 0.64,
+        viewR: 0.7,
         viewC: [0.5, 0.5],
         brush_size: 1.0,
         brush_mode: 0, // 0: erase, 1: seed
@@ -106,6 +106,12 @@ export function createDemoGrowing(glsl, divId) {
         document.onkeydown = e => {
             if (e.key === 'r') {
                 reset();
+            }
+            if (e.key === "n") {
+                for (let i = 0; i < 8; i++) {
+                    step();
+                    
+                }
             }
             if (e.key === "Shift") {
                 if (canvas.style.cursor != "grabbing") {

@@ -718,52 +718,64 @@
     canvas.width = 1024;
     canvas.height = 1024;
     const glsl = SwissGL(canvas);
-    let demo_type = "growing";
 
-    createDemoGrowing(glsl, "demo");
-    // createDemoPBR(glsl, "demo");
-    // createDemo3DTexture(glsl, "demo");
+    function getInitialDemoFromHash() {
+        const h = (window.location.hash || '').replace('#', '').toLowerCase();
+        // alert(h);
+        if (h === 'pbr') return 'pbr';
+        if (h === '3d_texture') return '3d_texture';
+        if (h === 'growing') return 'growing';
+        return 'growing';
+    }
 
-    document.getElementById('call-pbr-texture-demo').addEventListener('click', function () {
-        if (demo_type === "pbr") {
-            return;
-        }
-        demo_type = "pbr";
-        glsl.reset();
-        document.getElementById('pbr_texture_demo_button').classList.add("highlight-wrap");
+    function setHighlight(demoName) {
+        document.getElementById('pbr_texture_demo_button').classList.remove("highlight-wrap");
         document.getElementById('growing_demo_button').classList.remove("highlight-wrap");
         document.getElementById('3d_texture_demo_button').classList.remove("highlight-wrap");
-        createDemoPBR(glsl, "demo");
-        
+
+        if (demoName === "pbr") {
+            document.getElementById('pbr_texture_demo_button').classList.add("highlight-wrap");
+        } else if (demoName === "growing") {
+            document.getElementById('growing_demo_button').classList.add("highlight-wrap");
+        } else if (demoName === "3d_texture") {
+            document.getElementById('3d_texture_demo_button').classList.add("highlight-wrap");
+        }
+    }
+
+
+    let demo_type = getInitialDemoFromHash();
+    function InitializeDemo(tp, first = false) {
+        if (!first && demo_type === tp) {
+            return;
+        }
+        glsl.reset();
+
+        if (tp === "growing") {
+            createDemoGrowing(glsl, "demo");
+        } else if (tp === "pbr") {
+            createDemoPBR(glsl, "demo");
+        } else if (tp === "3d_texture") {
+            createDemo3DTexture(glsl, "demo");
+
+        }
+        setHighlight(tp);
+        demo_type = tp;
+        window.location.hash = tp;
+
+    }
+
+    InitializeDemo(demo_type, true);
+
+
+    document.getElementById('call-pbr-texture-demo').addEventListener('click', function () {
+        InitializeDemo("pbr");
     });
 
     document.getElementById('call-growing-demo').addEventListener('click', function () {
-        if (demo_type === "growing") {
-            return;
-        }
-        demo_type = "growing";
-        glsl.reset();
-        document.getElementById('pbr_texture_demo_button').classList.remove("highlight-wrap");
-        document.getElementById('3d_texture_demo_button').classList.remove("highlight-wrap");
-        document.getElementById('growing_demo_button').classList.add("highlight-wrap");
-        createDemoGrowing(glsl, "demo");
-        
-        
-        
-
+        InitializeDemo("growing");
     });
 
     document.getElementById('call-3d-texture-demo').addEventListener('click', function () {
-        if (demo_type === "3d_texture") {
-            return;
-        }
-        demo_type = "3d_texture";
-        document.getElementById('pbr_texture_demo_button').classList.remove("highlight-wrap");
-        document.getElementById('growing_demo_button').classList.remove("highlight-wrap");
-        document.getElementById('3d_texture_demo_button').classList.add("highlight-wrap");
-        glsl.reset();
-        createDemo3DTexture(glsl, "demo");
-        
-        
+        InitializeDemo("3d_texture");
     });
 </script>

@@ -297,7 +297,7 @@ export function createDemo3DTexture(glsl, divId) {
         const [x, y] = pos;
         const [px, py] = prevPos;
 
-        if (e.shiftKey) {
+        if (e.shiftKey || uniforms.brush_enabled == false) {
 
             let delta_phi = 0.0;
             let delta_theta = 0.0;
@@ -523,18 +523,20 @@ export function createDemo3DTexture(glsl, divId) {
     function brush(x, y) {
         const { nca } = model;
         glsl({
-            ...nca, ...camera_uniforms, x_pos: x, y_pos: y, FP: `
-            vec4 vpos = vec4(XY.x, XY.y, 0.0, 1.0);
+            ...nca, ...camera_uniforms, ...uniforms, x_pos: x, y_pos: y, FP: `
+            ivec3 voxel = grid2voxel(I);
+            vec3 pos_3d = (vec3(voxel) + 0.5) / vec3(BLOCK_DIM) * 2.0 - 1.0;
+            vec4 vpos = vec4(pos_3d, 1.0);
             vpos = projection * view * vpos;
             vpos.xy /= vpos.w;
             float dist = length(vpos.xy - vec2(x_pos, y_pos));
-            if (dist < 0.25) {
+            if (dist < 0.1 * brush_size) {
                 FOut = FOut1 = FOut2 = FOut3 = vec4(0.0);
             } else {
                 discard;
             }
         `
-        }, nca_grid[0]);
+        }, nca_grid);
 
     }
 
@@ -615,7 +617,7 @@ export function createDemo3DTexture(glsl, divId) {
             vec3 bg_color = vec3(background);
             // vec4 bg_color = vec4(background);
 
-            vec3 xyz_cam = vec3((UV.x * 2.0 - 1.0), (1.0 - UV.y * 2.0), -focal);
+            vec3 xyz_cam = vec3(XY.x, (1.0 - UV.y * 2.0), -focal);
             vec3 ray_direction = normalize(mat3(inverse(view)) * xyz_cam);
             vec3 ray_origin = camera_position;
             // vec3 inv_dir = 1.0 / (1e-8 + ray_direction);
@@ -721,7 +723,7 @@ export function createDemo3DTexture(glsl, divId) {
                 step();
             }
         }
-        rotate_camera(0.01 * m4.length(camera_uniforms.camera_position), 0.0);
+        rotate_camera(0.005 * m4.length(camera_uniforms.camera_position), 0.0);
         updateSiren();
         glsl({
             state: nca_grid[0].linear, siren_grid: siren_grid.linear, Mesh: IMAGE_DIM, ...uniforms, ...camera_uniforms, Aspect: 'fit',

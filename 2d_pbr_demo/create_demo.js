@@ -45,6 +45,8 @@ export function createDemoPBR(glsl, divId) {
     const camera = {
         theta: 45.0,
         phi: 30.0,
+        // theta: 89.0,
+        // phi: 90.0,
         distance: 2.0,
         fov: 60.0,
         znear: 0.001,
