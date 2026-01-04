@@ -26,7 +26,7 @@ export function createDemo3DTexture(glsl, divId) {
 
     const params = {
         models_path: './3d_texture_demo/models.json',
-        model: 'polka-doted_0121',
+        model: 'bubbly_0101',
         // model: 'Alex',
         // model: 'Sci-fi_Wall_010',
         runModel: true,
