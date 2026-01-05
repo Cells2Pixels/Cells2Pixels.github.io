@@ -24,7 +24,7 @@ export function createDemoPBR(glsl, divId) {
         // model: 'Sci-fi_Wall_010',
         runModel: true,
         relativeScale: 4,
-        reset_upon_load: false,
+        reset_upon_load: true,
         step_n: 1,
         speed: -1,
     };

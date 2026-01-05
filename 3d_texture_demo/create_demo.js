@@ -31,7 +31,7 @@ export function createDemo3DTexture(glsl, divId) {
         // model: 'Sci-fi_Wall_010',
         runModel: true,
         relativeScale: 2,
-        reset_upon_load: false,
+        reset_upon_load: true,
         step_n: 1,
         speed: -1,
     };
