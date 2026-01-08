@@ -39,7 +39,7 @@ export function createDemoPBR(glsl, divId) {
         heightScale: 0.15,
         showWireframe: false,
         zoom: 0.0,
-        geom: 0,
+        geom: 1,
     };
 
     const camera = {
@@ -478,7 +478,7 @@ export function createDemoPBR(glsl, divId) {
         const { nca } = model;
         glsl({
             ...nca, ...camera_uniforms, ...uniforms, x_pos: x, y_pos: y, FP: `
-            vec4 vpos = vec4(XY.x, XY.y, 0.0, 1.0);
+            vec4 vpos = vec4(XY.y, XY.x, 0.0, 1.0);
             vpos = projection * view * vpos;
             vpos.xy /= vpos.w;
             float dist = length(vpos.xy - vec2(x_pos, y_pos));
@@ -581,18 +581,20 @@ export function createDemoPBR(glsl, divId) {
         }
         updateSiren();
         let bgcolor = 1.0;
+        let mesh_size = uniforms.geom == 0 ? [1, 1]: [1024, 1024];
         glsl({
-            T: siren_grid.linear, Mesh: [512, 512], ...uniforms, ...camera_uniforms, Aspect: 'fit',
+            T: siren_grid.linear, Mesh: mesh_size, ...uniforms, ...camera_uniforms, Aspect: 'fit',
             Clear: [bgcolor, bgcolor, bgcolor, 0.0],
             time, DepthTest: 1, MeshMode: 1, VP: `
             float height = T(UV,0).a;
             varying vec3 v_position;
             VPos = vec4(XY,0,1);
-            float scaledHeight = height*heightScale;
+            float scaledHeight = (height - 0.5)*heightScale;
             if (geom==0.0) {
-                VPos.xyz = vec3(XY,scaledHeight);
+                // Keep the plane flat; relief comes from parallax occlusion mapping in the fragment shader.
+                VPos.xyz = vec3(XY.y, XY.x , 0.0);                
             } else {
-                VPos.xyz = torus(UV, 0.7, 0.2+scaledHeight);
+                VPos.xyz = vec3(XY.y, XY.x, scaledHeight);
             }
             // VPos.xy *= rot2(time*0.1);
             v_position = VPos.xyz;
@@ -630,14 +632,65 @@ export function createDemoPBR(glsl, divId) {
                 return ggx1 * ggx2;
             }
 
+            vec2 parallaxOcclusionMapUV(vec2 uv, vec3 viewDirTS, float depthScale) {
+                // Raymarch in UV space. Depth increases from 0..depthScale.
+                // displacement = (1 - height) * depthScale
+                // stop at the first depth where displacement <= depth
+                const int NUM_STEPS = 32;
+
+                float vdz = max(viewDirTS.z, 1e-4);
+                vec2 P = viewDirTS.yx / vdz;
+
+                // Convert an offset expressed in the plane's [-1,1] domain into UV (0..1)
+                vec2 uvStepScale = vec2(0.5);
+
+                bool found = false;
+                vec2 bestUV = uv;
+                float dp = depthScale * 0.5;
+
+                for (int depthIndex = 0; depthIndex <= NUM_STEPS + 1; ++depthIndex) {
+                    float depth = dp * float(depthIndex) / float(NUM_STEPS);
+                    vec2 offsetUV = P * depth;
+                    // vec2 uvSample = clamp(uv - offsetUV, vec2(0.0), vec2(1.0));
+                    vec2 uvSample = uv - offsetUV;
+
+
+
+                    float heightMap = T(uvSample, 0).a;
+                    float displacement = (1.0 - heightMap) * dp;
+
+                    if (!found && (displacement <= depth)) {
+                        found = true;
+                        bestUV = uvSample;
+                    }
+                }
+                return bestUV;
+            }
+
             void fragment() {
-                vec3 point_light = vec3(7.0);
-                vec3 ambient_light = vec3(0.25);
-                vec4 v0=T(UV,0), v1=T(UV,1), v2=T(UV,2);
+                vec3 point_light = vec3(0.7);
+                vec3 ambient_light = vec3(0.5);
+                // View direction used for lighting (on the displaced surface)
+                vec3 V = normalize(camera_position - v_position);
+
+                // Flat XY plane => constant tangent basis (T=x, B=y, N=z)
+
+                // POM: use the undisplaced plane position (z=0) to avoid feedback distortions
+                vec2 uvPOM = UV; 
+                if (geom == 0.0) {
+                    uvPOM = parallaxOcclusionMapUV(uvPOM, V, heightScale);
+                    if (uvPOM.x < 0.0 || uvPOM.x > 1.0 || uvPOM.y < 0.0 || uvPOM.y > 1.0) {
+                        FOut = vec4(0.0);
+                        return;
+                    }
+                }
+
+                
+                vec4 v0=T(uvPOM,0), v1=T(uvPOM,1), v2=T(uvPOM,2);
                 vec3 albedo = v0.rgb;
                 float height = v0.a;
-                float roughness = v1.x;
-                float ao = v1.y;
+                float roughness = clamp(v1.x, 0.1, 1.0);
+                float ao = clamp(v1.y, 0.05, 1.0);
                 vec3 normal = vec3(v1.zw, v2.x);
 
                 if (visMode == 1.0) {
@@ -651,16 +704,16 @@ export function createDemoPBR(glsl, divId) {
                 } else if (visMode==5.0) {
                     FOut.rgb = vec3(roughness);
                 } else {
-                    vec3 N = normalize(normal - 0.5);
-                    // vec3 N = normalize(vec3(0, 0, 1));
-                    vec3 V = normalize(camera_position - v_position);
-                    vec3 light_position = vec3(0, 0, 1) * 1.5;
+                    vec3 Nts = normalize(normal - 0.5);
+                    vec3 N = vec3(-Nts.y, Nts.x, Nts.z); // Map tangent space normal to world space
+                    vec3 light_position = vec3(0, 0, 2.0);
+                    // vec3 light_position = normalize(camera_position)*2.0;
                     vec3 L = normalize(light_position - v_position);
                     vec3 H = normalize(V + L);
 
                     float distance = length(light_position - v_position);
                     float attenuation = 1.0 / (distance * distance);
-                    vec3 radiance = point_light * attenuation;
+                    vec3 radiance = point_light * attenuation * 15.0;
 
                     vec3 F0 = vec3(0.04);
                     float metallic = 0.0;
