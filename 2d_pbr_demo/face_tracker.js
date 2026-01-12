@@ -17,7 +17,7 @@
     // Fallback: dynamically import the ESM bundle.
     // This makes the tracker robust when the UMD bundle fails to load (adblock, CDN outage, etc.).
     const mod = await import(
-      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs"
+      "../vendor/mediapipe/tasks-vision/vision_bundle.mjs"
     );
     globalThis.__mediapipeTasksVisionModule = mod;
     return mod;
@@ -43,6 +43,29 @@
     const yaw = Math.atan2(r02, r22);
     const roll = Math.atan2(r10, r11);
     return { yaw: yaw, pitch: pitch, roll: roll };
+  }
+
+  function isSecureCameraContext() {
+    return window.isSecureContext || location.protocol === "https:";
+  }
+
+  async function requestCameraStream(constraints) {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      return navigator.mediaDevices.getUserMedia(constraints);
+    }
+
+    const legacyGetUserMedia =
+      navigator.webkitGetUserMedia || navigator.getUserMedia;
+    if (legacyGetUserMedia) {
+      return new Promise((resolve, reject) =>
+        legacyGetUserMedia.call(navigator, constraints, resolve, reject)
+      );
+    }
+
+    const reason = isSecureCameraContext()
+      ? "getUserMedia is not supported in this browser"
+      : "Camera access requires HTTPS (or localhost). Reload the page over https://";
+    throw new Error(reason);
   }
 
   class FaceCameraTracker {
@@ -78,10 +101,10 @@
         // MediaPipe bundle version + model
         wasmRoot:
           opt.wasmRoot ??
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm",
+          "../vendor/mediapipe/tasks-vision/wasm",
         modelAssetPath:
           opt.modelAssetPath ??
-          "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+          "../vendor/mediapipe/models/face_landmarker.task",
       };
 
       this.pose = {
@@ -102,10 +125,6 @@
 
     async start() {
       if (this.started) return;
-
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error("getUserMedia is not available in this browser");
-      }
 
       let visionApi;
       try {
@@ -130,7 +149,7 @@
         this._video = v;
       }
 
-      this._stream = await navigator.mediaDevices.getUserMedia({
+      this._stream = await requestCameraStream({
         video: { facingMode: "user" },
         audio: false,
       });

@@ -389,6 +389,7 @@
             }
 
             void fragment() {
+                
                 vec3 point_light = vec3(0.7);
                 vec3 ambient_light = vec3(0.5);
                 // View direction used for lighting (on the displaced surface)
@@ -398,7 +399,7 @@
 
                 // POM: use the undisplaced plane position (z=0) to avoid feedback distortions
                 vec2 uvPOM = UV; 
-                if (geom == 0.0) {
+                if (geom < 0.5) {
                     uvPOM = parallaxOcclusionMapUV(uvPOM, V, heightScale);
                     if (uvPOM.x < 0.0 || uvPOM.x > 1.0 || uvPOM.y < 0.0 || uvPOM.y > 1.0) {
                         FOut = vec4(0.0);
@@ -406,6 +407,7 @@
                     }
                 }
 
+                FOut.a = 1.0;
                 
                 vec4 v0=T(uvPOM,0), v1=T(uvPOM,1), v2=T(uvPOM,2);
                 vec3 albedo = v0.rgb;
