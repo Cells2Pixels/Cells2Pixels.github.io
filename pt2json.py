@@ -43,7 +43,7 @@ def export_model(folder):
 
 if __name__ == '__main__':
     models = {}
-    demo_type = "2d_growing_demo"
+    demo_type = "2d_pbr_demo"
     for folder in sorted(glob(f'{demo_type}/models/*')):
         name = folder.split('/')[-1]
         print(name)

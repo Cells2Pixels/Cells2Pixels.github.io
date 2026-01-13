@@ -45,8 +45,8 @@ export function createDemoPBR(glsl, divId) {
     const camera = {
         theta: 45.0,
         phi: 30.0,
-        // theta: 89.0,
-        // phi: 90.0,
+        // theta: 89.9,
+        // phi: 0.0,
         distance: 2.0,
         fov: 60.0,
         znear: 0.001,
@@ -581,7 +581,7 @@ export function createDemoPBR(glsl, divId) {
         }
         updateSiren();
         let bgcolor = 1.0;
-        let mesh_size = uniforms.geom == 0 ? [1, 1]: [1024, 1024];
+        let mesh_size = uniforms.geom == 0 ? [1, 1]: [128 * params.relativeScale, 128 * params.relativeScale];
         glsl({
             T: siren_grid.linear, Mesh: mesh_size, ...uniforms, ...camera_uniforms, Aspect: 'fit',
             Clear: [bgcolor, bgcolor, bgcolor, 0.0],
@@ -826,6 +826,7 @@ export function createDemoPBR(glsl, divId) {
         "Tiles_047",
         "Tiles_047 + AutoCorr",
         "Waffle_001",
+        "Waffle_001 + AutoCorr",
         "Wall_Shells_001",
         "Wood_Acoustic_Panel_001",
         "Wood_Acoustic_Panel_001 + AutoCorr",
