@@ -199,7 +199,7 @@ export function createDemoPBR(glsl, divId) {
                 uniforms.zoom = 4.0;
                 $('#zoomIn').classList.add("disabled");
             }
-            reset_camera();
+            rotate_camera(0, 0);
         }
 
         $('#zoomOut').onclick = () => {
@@ -209,7 +209,7 @@ export function createDemoPBR(glsl, divId) {
                 uniforms.zoom = -1.0;
                 $('#zoomOut').classList.add("disabled");
             }
-            reset_camera();
+            rotate_camera(0, 0);
         }
 
         $$('#brush_size input').forEach((sel, i) => {
