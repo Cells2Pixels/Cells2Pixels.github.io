@@ -20,7 +20,6 @@ export function createDemoPBR(glsl, divId) {
         models_path: './2d_pbr_demo/models.json',
         // models_path: './pbr_nca.json',
         model: 'Abstract_008',
-        // model: 'Sci-fi_Wall_010',
         runModel: true,
         relativeScale: 4,
         reset_upon_load: true,
