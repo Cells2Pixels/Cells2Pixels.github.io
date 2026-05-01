@@ -19,7 +19,6 @@ export function createDemoGrowing(glsl, divId) {
         models_path: './2d_growing_demo/models.json',
         // models_path: './pbr_nca.json',
         model: 'Chameleon',
-        // model: 'Alex',
         // model: 'Sci-fi_Wall_010',
         runModel: true,
         relativeScale: 4,

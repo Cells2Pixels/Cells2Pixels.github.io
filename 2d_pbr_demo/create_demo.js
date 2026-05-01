@@ -20,8 +20,6 @@ export function createDemoPBR(glsl, divId) {
         models_path: './2d_pbr_demo/models.json',
         // models_path: './pbr_nca.json',
         model: 'Abstract_008',
-        // model: 'Alex',
-        // model: 'Sci-fi_Wall_010',
         runModel: true,
         relativeScale: 4,
         reset_upon_load: true,
@@ -45,8 +43,8 @@ export function createDemoPBR(glsl, divId) {
     const camera = {
         theta: 45.0,
         phi: 30.0,
-        // theta: 89.0,
-        // phi: 90.0,
+        // theta: 89.9,
+        // phi: 0.0,
         distance: 2.0,
         fov: 60.0,
         znear: 0.001,
@@ -201,7 +199,7 @@ export function createDemoPBR(glsl, divId) {
                 uniforms.zoom = 4.0;
                 $('#zoomIn').classList.add("disabled");
             }
-            reset_camera();
+            rotate_camera(0, 0);
         }
 
         $('#zoomOut').onclick = () => {
@@ -211,7 +209,7 @@ export function createDemoPBR(glsl, divId) {
                 uniforms.zoom = -1.0;
                 $('#zoomOut').classList.add("disabled");
             }
-            reset_camera();
+            rotate_camera(0, 0);
         }
 
         $$('#brush_size input').forEach((sel, i) => {
@@ -362,6 +360,7 @@ export function createDemoPBR(glsl, divId) {
 
             let media_path = "./2d_pbr_demo/target_images/" + name + "/rendered_white.jpg"
             console.log(media_path);
+            let autocorr = name.includes(' + AutoCorr');
             media_path = media_path.replace(' + AutoCorr', '');
 
 
@@ -371,9 +370,10 @@ export function createDemoPBR(glsl, divId) {
             // target_img.style.backgroundSize = "100px100px";
             target_img.id = name; //html5 support arbitrary id:s
             target_img.className = 'target-square';
+            target_img.style.borderColor = autocorr ? "rgb(97, 201, 23)" : "white";
             target_img.onclick = () => {
                 // removeOverlayIcon();
-                currentTarget.style.borderColor = "white";
+                currentTarget.style.borderColor = currentTarget.id.includes(' + AutoCorr') ? "rgb(97, 201, 23)" : "white";
                 currentTarget = target_img;
                 target_img.style.borderColor = "rgb(245 140 44)";
                 if (!window.matchMedia('(min-width: 500px)').matches && navigator.userAgent.includes("Chrome")) {
@@ -581,7 +581,7 @@ export function createDemoPBR(glsl, divId) {
         }
         updateSiren();
         let bgcolor = 1.0;
-        let mesh_size = uniforms.geom == 0 ? [1, 1]: [1024, 1024];
+        let mesh_size = uniforms.geom == 0 ? [1, 1]: [128 * params.relativeScale, 128 * params.relativeScale];
         glsl({
             T: siren_grid.linear, Mesh: mesh_size, ...uniforms, ...camera_uniforms, Aspect: 'fit',
             Clear: [bgcolor, bgcolor, bgcolor, 0.0],
@@ -753,11 +753,16 @@ export function createDemoPBR(glsl, divId) {
         "Abstract_009",
         "Abstract_008",
         "Sci-Fi_Padded_Fabric_004",
+        "Sci-Fi_Padded_Fabric_004 + AutoCorr",
         "Sci-Fi_Wall_012",
+        "Sci-Fi_Wall_012 + AutoCorr",
         "Sci-fi_Hose_005",
         "Sci-fi_Wall_004",
+        "Sci-fi_Wall_004 + AutoCorr",
         "Sci-fi_Wall_005",
+        "Sci-fi_Wall_005 + AutoCorr",
         "Sci-fi_Wall_009",
+        "Sci-fi_Wall_009 + AutoCorr",
         "Sci-fi_Wall_010",
         "Sci-fi_Wall_010 + AutoCorr",
         "Skin_Lizard_002",
@@ -769,11 +774,17 @@ export function createDemoPBR(glsl, divId) {
         "Abstract_Organic_006",
         "Bark_007",
         "Bricks_Terracotta_002",
+        "Bricks_Terracotta_002 + AutoCorr",
         "Bricks_Terracotta_003",
+        "Bricks_Terracotta_003 + AutoCorr",
         "Concrete_Blocks_005",
+        "Concrete_Blocks_005 + AutoCorr",
         "Concrete_Blocks_006",
+        "Concrete_Blocks_006 + AutoCorr",
         "Concrete_Blocks_008",
+        "Concrete_Blocks_008 + AutoCorr",
         "Concrete_Blocks_009",
+        "Concrete_Blocks_009 + AutoCorr",
         "Concrete_Blocks_012",
         "Concrete_Blocks_012 + AutoCorr",
         "Coral_001",
@@ -791,6 +802,7 @@ export function createDemoPBR(glsl, divId) {
         "Lava_006",
         "Leather_Padded_001",
         "Leather_weave_002",
+        "Leather_weave_002 + AutoCorr",
         "Metal_Corrugated_010",
         "Metal_Mesh_002",
         "Metal_Mesh_006",
@@ -823,9 +835,11 @@ export function createDemoPBR(glsl, divId) {
         "Stylized_blocks_001",
         "Stylized_blocks_001 + AutoCorr",
         "Substance_Graph",
+        "Substance_Graph + AutoCorr",
         "Tiles_047",
         "Tiles_047 + AutoCorr",
         "Waffle_001",
+        "Waffle_001 + AutoCorr",
         "Wall_Shells_001",
         "Wood_Acoustic_Panel_001",
         "Wood_Acoustic_Panel_001 + AutoCorr",
@@ -833,6 +847,7 @@ export function createDemoPBR(glsl, divId) {
         "Wood_Ceiling_001 + AutoCorr",
         "Wood_Chiseled_001",
         "Wood_Panel_003",
+        "Wood_Panel_003 + AutoCorr",
     ]
 
 }
