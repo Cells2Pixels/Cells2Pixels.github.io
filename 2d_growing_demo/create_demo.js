@@ -675,8 +675,13 @@ export function createDemoGrowing(glsl, divId) {
             vec4 rgba = siren_grid(uv, 0);
             vec3 rgb = rgba.xyz * 1.0;
             float alpha = rgba.w;
-            // rgb = rgb * alpha + (1.0 - alpha) * 1.0;
-            FOut = vec4(rgb, alpha) / 1.0;
+            
+            // At training the rgb target was already premultiplied by alpha
+            // So one of the solutions below is actually more correct.
+            // if (alpha > 1e-4)
+            //     rgb = rgb / alpha;
+            rgb = rgb + (1.0 - alpha);
+            FOut = vec4(rgb, 1.0);
         }
 
 

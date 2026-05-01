@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cells2Pixels PBR Demo (Face Camera)</title>
+    <script src="../swissgl.js"></script>
+    <script src="../dat.gui.min.js"></script>
+    <script src="https://webgl2fundamentals.org/webgl/resources/m4.js"></script>
+
+    <!-- MediaPipe Tasks Vision (global `vision`) -->
+    <script type="module">
+        import * as vision from "../vendor/mediapipe/tasks-vision/vision_bundle.mjs";
+        window.vision = vision;
+    </script>
+    <!-- Face tracker (global `FaceCameraTracker`) -->
+    <script src="./face_tracker.js"></script>
+
+    <style>
+        body {
+            background-color: black;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        canvas {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #faceUI {
+            position: fixed;
+            left: 12px;
+            top: 12px;
+            z-index: 1000;
+            color: #eaeaea;
+            font: 12px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+            background: rgba(0, 0, 0, 0.55);
+            padding: 10px 12px;
+            border-radius: 8px;
+            user-select: text;
+            white-space: pre;
+        }
+
+        #faceStart {
+            display: inline-block;
+            margin-top: 6px;
+            padding: 8px 10px;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        #faceStart:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="c"></canvas>
+
+    <div id="faceUI">
+        Face camera: <span id="faceStatus">off</span>
+        <button id="faceStart" type="button">Enable webcam face camera</button>
+        <div id="faceHud"></div>
+    </div>
+
+    <script>
+        const $ = s => document.querySelector(s);
+        const canvas = $("#c");
+        const glsl = SwissGL(canvas);
+        const gui = new dat.GUI();
+
+        const CHN = 16, C4 = CHN / 4, S4 = 3;
+        let models, model;
+        let nca_grid, siren_grid;
+
+
+        const params = {
+            model: 'Leather_Padded_001',
+            runModel: true,
+            relativeScale: 8,
+        };
+        const faceParams = {
+            xyGainBase: 0.023,
+            depthGain: 0.0,
+        };
+        const uniforms = {
+            visMode: 0,
+            heightScale: 0.2,
+            showWireframe: false,
+            zoom: 0.0,
+            geom: 1,
+        }
+
+        const camera = {
+            theta: 25.0,
+            phi: 0.0,
+            // theta: 0.0,
+            // phi: 0.0,
+            distance: 2.0,
+            fov: 60.0,
+            znear: 0.001,
+            zfar: 100.0,
+            aspect: 1.0,
+            up: [0, 0, 1],
+            look_at: [0, 0, 0],
+        }
+        const camera_uniforms = {
+            camera_position: null,
+            view: null,
+            projection: null,
+        }
+
+        // --- Face camera integration ---
+        const faceStatus = $("#faceStatus");
+        const faceStart = $("#faceStart");
+        const faceHud = $("#faceHud");
+        let faceTracker = null;
+        let faceEnabled = false;
+
+        // Camera base state (controlled by mouse/GUI). Face offsets are applied on top.
+        let base_camera_position = null;
+
+        function fmt(n) {
+            if (!Number.isFinite(n)) return "NaN";
+            const abs = Math.abs(n);
+            if (abs >= 100) return n.toFixed(1);
+            if (abs >= 10) return n.toFixed(2);
+            return n.toFixed(3);
+        }
+
+        function applyCameraFromBase(poseOrNull) {
+            const up = camera.up;
+            const look_at = camera.look_at;
+            const zoom = uniforms.zoom;
+            const radius = camera.distance / Math.pow(2., zoom);
+
+            if (!base_camera_position) {
+                return;
+            }
+
+            // Default (no face): just use the base camera.
+            let camPos = base_camera_position;
+
+            if (poseOrNull && poseOrNull.ok) {
+                // Compute camera-local axes based on base position.
+                const y_camera = m4.normalize(m4.subtractVectors(look_at, base_camera_position));
+                const upn = m4.normalize(up);
+                const z_camera = m4.normalize(m4.subtractVectors(upn, m4.scaleVector(upn, m4.dot(y_camera, upn))));
+                const x_camera = m4.normalize(m4.cross(y_camera, z_camera));
+
+                // Map face x/y to offsets in camera tangent plane.
+                // Signs chosen to feel like a "window into" the scene.
+                camPos = m4.addVectors(base_camera_position, m4.scaleVector(x_camera, -poseOrNull.x));
+                camPos = m4.addVectors(camPos, m4.scaleVector(z_camera, -poseOrNull.y));
+
+                // Optionally also move along view direction (usually keep this off).
+                if (poseOrNull.z && poseOrNull.z !== 0) {
+                    camPos = m4.addVectors(camPos, m4.scaleVector(y_camera, -poseOrNull.z));
+                }
+
+                // Keep distance stable to avoid unintended zooming.
+                camPos = m4.scaleVector(m4.normalize(camPos), radius);
+            }
+
+            camera_uniforms.camera_position = camPos;
+            camera_uniforms.view = m4.inverse(m4.lookAt(camPos, look_at, up));
+            camera_uniforms.projection = m4.perspective(camera.fov * Math.PI / 180, camera.aspect, camera.znear, camera.zfar);
+        }
+
+        faceStart.onclick = async () => {
+            faceStart.disabled = true;
+            faceStatus.textContent = "starting…";
+            try {
+                faceTracker = new FaceCameraTracker({
+                    // Tune these if you want even stronger effect.
+                    xyGainBase: faceParams.xyGainBase,
+                    depthGain: faceParams.depthGain,
+                    depthScaleMin: 1.0,
+                    depthScaleMax: 2.0,
+                    maxXYBase: 2.0,
+                    zGain: 0.0,
+                });
+                await faceTracker.start();
+                faceTracker.resetNeutral();
+                faceEnabled = true;
+                faceStatus.textContent = "on";
+            } catch (e) {
+                console.error(e);
+                faceEnabled = false;
+                faceStatus.textContent = "error";
+                faceHud.textContent = String(e && e.message ? e.message : e);
+                faceStart.disabled = false;
+            }
+        };
+
+
+        let last_cursor_style = 'default';
+        let prevPos = [0, 0];
+
+        gui.add(uniforms, 'visMode', {
+            'rgb': 0, 'albedo': 1, 'normal': 2, 'height': 3,
+            'ao': 4, 'roughness': 5
+        });
+        gui.add(uniforms, 'geom', { 'parallax': 0, 'elevation': 1 });
+        gui.add(uniforms, 'heightScale', 0.0, 0.5);
+        gui.add(uniforms, 'zoom', 0.0, 3.0).onChange(() => {
+            reset_camera();
+        });
+        gui.add(uniforms, 'showWireframe');
+        gui.add(params, 'runModel');
+        gui.add(params, 'relativeScale', 1, 8, 1).onChange(updateSiren);
+        const faceFolder = gui.addFolder('Face camera');
+        faceFolder
+            .add(faceParams, 'xyGainBase', 0.0, 0.05, 0.001)
+            .name('XY gain')
+            .onChange(value => {
+                if (faceTracker && faceTracker.params) {
+                    faceTracker.params.xyGainBase = value;
+                }
+            });
+
+        faceFolder
+            .add(faceParams, 'depthGain', 0.0, 0.05, 0.001)
+            .name('Depth gain')
+            .onChange(value => {
+                if (faceTracker && faceTracker.params) {
+                    faceTracker.params.depthGain = value;
+                }
+            });
+
+        function init_event_listeners() {
+            document.addEventListener('keydown', e => {
+                if (e.key === 'r') {
+                    reset();
+                }
+                if (e.key === "Shift") {
+                    if (canvas.style.cursor != "grabbing") {
+                        canvas.style.cursor = "grab";
+                        last_cursor_style = canvas.style.cursor;
+                    }
+                }
+            });
+            document.addEventListener("keyup", e => {
+                if (e.key === 'Shift') {
+                    canvas.style.cursor = "default";
+                    last_cursor_style = canvas.style.cursor;
+                }
+            });
+
+            canvas.onmousedown = e => {
+                e.preventDefault();
+                // left click
+                if (e.buttons == 1) {
+                    if (e.shiftKey) {
+                        canvas.style.cursor = "grabbing";
+                    } else {
+                        canvas.style.cursor = 'pointer';
+                    }
+                    click(getMousePos(e), e, true);
+                }
+            }
+            canvas.onmousemove = e => {
+                e.preventDefault();
+                if (e.buttons == 1) {
+                    click(getMousePos(e), e, false);
+                }
+            }
+            canvas.onmouseup = e => {
+                e.preventDefault();
+                canvas.style.cursor = last_cursor_style;
+            }
+
+            canvas.addEventListener("touchstart", e => {
+                e.preventDefault();
+                click(getTouchPos(e.changedTouches[0]), e, true);
+            });
+            canvas.addEventListener("touchmove", e => {
+                e.preventDefault();
+                for (const t of e.touches) {
+                    click(getTouchPos(t), e, false);
+                }
+            });
+
+        }
+
+        function getMousePos(e) {
+            const gridX = e.offsetX / canvas.clientWidth;
+            const gridY = e.offsetY / canvas.clientHeight;
+            return [gridX, gridY];
+        }
+
+        function getTouchPos(touch) {
+            const rect = canvas.getBoundingClientRect();
+            const gridX = (touch.clientX - rect.left) / canvas.clientWidth;
+            const gridY = (touch.clientY - rect.top) / canvas.clientHeight;
+            return [gridX, gridY];
+        }
+
+        function click(pos, e, first_touch = false) {
+            const [x, y] = pos;
+            const [px, py] = prevPos;
+
+            if (e.shiftKey) {
+
+                let delta_phi = 0.0;
+                let delta_theta = 0.0;
+
+                if (!first_touch) {
+                    delta_phi = -(x - px) * 4.0;
+                    delta_theta = (y - py) * 4.0;
+                }
+                rotate_camera(delta_phi, delta_theta);
+                prevPos = pos;
+            } else {
+                // Adjust with the aspect ratio
+                const c = Math.min(canvas.clientWidth, canvas.clientHeight);
+                const adjustedX = (x * 2.0 - 1.0) * (canvas.clientWidth / c);
+                const adjustedY = -(y * 2.0 - 1.0) * (canvas.clientHeight / c);
+                brush(adjustedX, adjustedY);
+                prevPos = pos;
+            }
+
+
+        }
+
+        function reset_camera() {
+            const { theta, phi, distance, fov, znear, zfar, aspect } = camera;
+            const zoom = uniforms.zoom;
+
+            base_camera_position = [
+                distance * Math.cos(theta * Math.PI / 180) * Math.cos(phi * Math.PI / 180) / Math.pow(2., zoom),
+                distance * Math.cos(theta * Math.PI / 180) * Math.sin(phi * Math.PI / 180) / Math.pow(2., zoom),
+                distance * Math.sin(theta * Math.PI / 180) / Math.pow(2., zoom)
+            ];
+
+            applyCameraFromBase(faceEnabled && faceTracker ? faceTracker.pose : null);
+        }
+
+        function rotate_camera(delta_phi, delta_theta) {
+            if (!base_camera_position) return;
+            let up = m4.normalize(camera.up);
+            const { distance, look_at } = camera;
+            const zoom = uniforms.zoom;
+
+            let y_camera = m4.normalize(m4.subtractVectors(look_at, base_camera_position));
+            let z_camera = m4.normalize(m4.subtractVectors(up, m4.scaleVector(up, m4.dot(y_camera, up))));
+            let x_camera = m4.normalize(m4.cross(y_camera, z_camera));
+
+            base_camera_position = m4.addVectors(base_camera_position, m4.scaleVector(x_camera, delta_phi));
+            base_camera_position = m4.addVectors(base_camera_position, m4.scaleVector(z_camera, delta_theta));
+            base_camera_position = m4.scaleVector(m4.normalize(base_camera_position), distance / Math.pow(2., zoom));
+
+            applyCameraFromBase(faceEnabled && faceTracker ? faceTracker.pose : null);
+        }
+
+        init_event_listeners();
+
+
+        async function init() {
+            const response = await fetch('./models.json');
+            models = await response.json();
+            for (const name in models)
+                for (const k in models[name]) {
+                    const src = models[name][k];
+                    src.data = new Float32Array(
+                        Uint8Array.from(atob(src.data64), c => c.charCodeAt(0)).buffer);
+                    delete src.data64;
+                }
+            gui.add(params, 'model', Object.keys(models)).onChange(name => {
+                model = load_model(name);
+            });
+            model = load_model(params.model);
+            reset();
+            reset_camera();
+            frame();
+        }
+
+        init();
+
+        function load_model(name) {
+            const src = models[name];
+            // init NCA
+            const [ch, ci] = src['nca.w1.weight'].shape, co = src['nca.w2.weight.T'].shape[1];
+            console.assert(co == CHN)
+            const nca = {
+                w1: glsl({}, {
+                    size: [ci / 4, ch], format: 'rgba32f',
+                    data: src['nca.w1.weight'].data, tag: 'w1'
+                }),
+                b1: glsl({}, {
+                    size: [1, ch], format: 'r32f',
+                    data: src['nca.w1.bias'].data, tag: 'b1'
+                }),
+                w2t: glsl({}, {
+                    size: [co / 4, ch], format: 'rgba32f',
+                    data: src['nca.w2.weight.T'].data, tag: 'w2t'
+                }),
+            };
+
+            // init Siren
+            const sirenLayerN = 4;
+            const inc = [`const int C4 = ${C4}; const int D4=32/4;`];
+            const siren = {};
+            for (let i = 0; i < sirenLayerN; ++i) {
+                const last = i == sirenLayerN - 1;
+                const s = `lppn.net.${i}` + (last ? '' : '.linear');
+                const weight = src[s + '.weight'];
+                const bias = src[s + '.bias'];
+                const [no, ni] = weight.shape;
+                inc.push(`
+                uniform vec4 W${i}[${no * ni / 4}];
+                uniform float B${i}[${no}];
+                void run_layer${i}(in vec4 src[D4], out vec4 dst[D4]) {
+                    const int no=${no}, ni=${ni};
+                    for (int i=0; i<no; ++i) {
+                        float a = B${i}[i];
+                        #pragma unroll
+                        for (int j=0; j<ni/4; ++j) {
+                            a += dot(src[j], W${i}[i*ni/4 + j]);
+                        }
+                        dst[i/4][i%4] = ${last} ? a : sin(a*10.0);
+                    }
+                }`);
+                siren['W' + i] = weight.data;
+                siren['B' + i] = bias.data;
+            }
+            siren['Inc'] = inc.join('\n');
+            return { nca, siren };
+        }
+
+
+        function frame(time) {
+            glsl.adjustCanvas();
+            time /= 1000.0;
+
+            // Apply face camera offsets once per frame.
+            if (faceEnabled && faceTracker) {
+                const pose = faceTracker.update();
+                applyCameraFromBase(pose);
+                if (pose && pose.ok) {
+                    faceHud.textContent =
+                        "pos (x,y): " + fmt(pose.x) + ", " + fmt(pose.y) + "\n" +
+                        "depthScale: " + fmt(pose.depthScale) + "\n";
+                } else {
+                    faceHud.textContent = "(no face)";
+                }
+            }
+
+            if (params.runModel) {
+                step();
+            }
+            updateSiren();
+            glsl({
+                T: siren_grid.linear, Mesh: [1024, 1024], ...uniforms, ...camera_uniforms, Aspect: 'fit',
+                time, DepthTest: 1, MeshMode: 1, VP: `
+            float height = T(UV,0).a;
+            varying vec3 v_position;
+            VPos = vec4(XY,0,1);
+            float scaledHeight = (height - 0.5)*heightScale;
+            if (geom==0.0) {
+                // Keep the plane flat; relief comes from parallax occlusion mapping in the fragment shader.
+                VPos.xyz = vec3(XY.y, XY.x , 0.0);
+            } else {
+                VPos.xyz = vec3(XY.y, XY.x, scaledHeight);
+            }
+            v_position = VPos.xyz;
+            VPos = projection * view * VPos;
+            `, FP: `
+            vec3 fresnelSchlick(float cosTheta, vec3 F0) {
+                return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+            }
+
+            float DistributionGGX(vec3 N, vec3 H, float roughness) {
+                float a = roughness*roughness;
+                float a2     = a*a;
+                float NdotH  = max(dot(N, H), 0.0);
+                float NdotH2 = NdotH*NdotH;
+                float num   = a2;
+                float denom = (NdotH2 * (a2 - 1.0) + 1.0);
+                denom = PI * denom * denom;
+                return num / denom;
+            }
+
+            float GeometrySchlickGGX(float NdotV, float roughness) {
+                float r = (roughness + 1.0);
+                float k = (r*r) / 8.0;
+
+                float num   = NdotV;
+                float denom = NdotV * (1.0 - k) + k;
+                return num / denom;
+            }
+            float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
+                float NdotV = max(dot(N, V), 0.0);
+                float NdotL = max(dot(N, L), 0.0);
+                float ggx2  = GeometrySchlickGGX(NdotV, roughness);
+                float ggx1  = GeometrySchlickGGX(NdotL, roughness);
+                return ggx1 * ggx2;
+            }
+
+            vec2 parallaxOcclusionMapUV(vec2 uv, vec3 viewDirTS, float depthScale) {
+                const int NUM_STEPS = 50;
+
+                float vdz = max(viewDirTS.z, 1e-4);
+                vec2 P = viewDirTS.yx / vdz;
+
+                bool found = false;
+                vec2 bestUV = uv;
+                float dp = depthScale * 0.5;
+
+                for (int depthIndex = 0; depthIndex <= NUM_STEPS + 1; ++depthIndex) {
+                    float depth = dp * float(depthIndex) / float(NUM_STEPS);
+                    vec2 offsetUV = P * depth;
+                    vec2 uvSample = uv - offsetUV;
+
+                    float heightMap = T(uvSample, 0).a;
+                    float displacement = (1.0 - heightMap) * dp;
+
+                    if (!found && (displacement <= depth)) {
+                        found = true;
+                        bestUV = uvSample;
+                    }
+                }
+                return bestUV;
+            }
+
+            void fragment() {
+                vec3 point_light = vec3(0.7);
+                vec3 ambient_light = vec3(0.5);
+                vec3 V = normalize(camera_position - v_position);
+
+                vec2 uvPOM = UV; 
+                if (geom == 0.0) {
+                    uvPOM = parallaxOcclusionMapUV(uvPOM, V, heightScale);
+                    if (uvPOM.x < 0.0 || uvPOM.x > 1.0 || uvPOM.y < 0.0 || uvPOM.y > 1.0) {
+                        FOut = vec4(0.0);
+                        return;
+                    }
+                }
+
+                vec4 v0=T(uvPOM,0), v1=T(uvPOM,1), v2=T(uvPOM,2);
+                vec3 albedo = v0.rgb;
+                float height = v0.a;
+                float roughness = clamp(v1.x, 0.1, 1.0);
+                float ao = clamp(v1.y, 0.05, 1.0);
+                vec3 normal = vec3(v1.zw, v2.x);
+                FOut.a = 1.0;
+                
+                if (visMode == 1.0) {
+                    FOut = vec4(albedo, 1.0);
+                } else if (visMode==2.0) {
+                    FOut.rgb = normal;
+                } else if (visMode==3.0) {
+                    FOut.rgb = vec3(height);
+                } else if (visMode==4.0) {
+                    FOut.rgb = vec3(ao);
+                } else if (visMode==5.0) {
+                    FOut.rgb = vec3(roughness);
+                } else {
+                    vec3 Nts = normalize(normal - 0.5);
+                    vec3 N = vec3(-Nts.y, Nts.x, Nts.z);
+                    vec3 light_position = vec3(0, 0, 2.0);
+                    vec3 L = normalize(light_position - v_position);
+                    vec3 H = normalize(V + L);
+
+                    float distance = length(light_position - v_position);
+                    float attenuation = 1.0 / (distance * distance);
+                    vec3 radiance = point_light * attenuation * 15.0;
+
+                    vec3 F0 = vec3(0.04);
+                    float metallic = 0.0;
+                    F0 = mix(F0, albedo, metallic);
+
+                    float NDF = DistributionGGX(N, H, roughness);
+                    float G = GeometrySmith(N, V, L, roughness);
+                    vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+
+                    vec3 kS = F;
+                    vec3 kD = vec3(1.0) - kS;
+                    kD *= 1.0 - metallic;
+
+                    vec3 numerator = NDF * G * F;
+                    float NdotL = max(dot(N, L), 0.0);
+                    float NdotV = max(dot(N, V), 0.0);
+                    float denominator = 4.0 * NdotV * NdotL + 0.0001;
+                    vec3 specular = numerator / denominator;
+
+                    vec3 Lo = (kD * albedo / PI + specular) * radiance * NdotL;
+
+                    FOut.rgb = albedo * ao * ambient_light + Lo;
+
+                }
+                if (showWireframe) {
+                    FOut.rgb = FOut.rgb + wireframe()*0.2;
+                }
+            }
+        `
+            });
+
+            requestAnimationFrame(frame);
+        }
+
+        function reset() {
+            nca_grid = glsl({
+                seed: 42, FP: `
+            FOut = FOut1 = FOut2 = FOut3 = vec4(0);
+        `
+            }, { size: [128, 128], layern: C4, format: 'rgba16f', story: 2, tag: 'grid' });
+        }
+
+        function brush(x, y) {
+            const { nca } = model;
+            glsl({
+                ...nca, ...camera_uniforms, x_pos: x, y_pos: y, FP: `
+            vec4 vpos = vec4(XY.y, XY.x, 0.0, 1.0);
+            vpos = projection * view * vpos;
+            vpos.xy /= vpos.w;
+            float dist = length(vpos.xy - vec2(x_pos, y_pos));
+            if (dist < 0.25) {
+                FOut = FOut1 = FOut2 = FOut3 = vec4(0.0);
+            } else {
+                discard;
+            }
+        `
+            }, nca_grid[0]);
+
+        }
+
+        function step() {
+            const { nca } = model;
+            glsl({
+                ...nca, seed: Math.random() * 26321, FP: `
+            const int C4 = ${C4};
+            const mat3 Kx = mat3(-1,-2,-1, 0,0,0, 1,2,1);
+            const mat3 Ky = mat3(-1,0,1, -2,0,2, -1,0,1);
+            const mat3 Klap = mat3(1,2,1, 2,-12,2, 1,2,1);
+
+            vec4 perc[C4*4], upd[C4];
+            
+            void neib(int x, int y) {
+                ivec2 p = (ivec2(I.x+x-1, I.y+y-1)+ViewSize)%ViewSize;
+                for (int i=0; i<C4; ++i) {
+                    vec4 v = Src(p,i);
+                    perc[C4+i]   += Kx[x][y]*v; 
+                    perc[C4*2+i] += Ky[x][y]*v;
+                    perc[C4*3+i] += Klap[x][y]*v;
+                }
+            }
+
+            void fragment() {
+                for (int i=0; i<C4; ++i) {
+                    upd[i] = perc[i] = Src(I,i);
+                    perc[i+C4*3] = Klap[1][1]*upd[i];
+                }
+                FOut = upd[0]; FOut1 = upd[1]; FOut2 = upd[2]; FOut3 = upd[3];
+                if (hash(ivec3(I,seed)).x>0.5) return;
+                neib(0,0); neib(0,1); neib(0,2);
+                neib(1,0);            neib(1,2);
+                neib(2,0); neib(2,1); neib(2,2);
+                
+                int ci = w1_size().x, ch = w1_size().y;
+                for (int h=0; h<ch; ++h) {
+                    float y = b1(ivec2(0, h)).x;
+                    for (int i=0; i<ci; ++i) {y += dot(perc[i], w1(ivec2(i, h)));}
+                    if (y<=0.0) continue;
+                    for (int i=0; i<C4; ++i) {upd[i] += y*w2t(ivec2(i, h));}
+                }
+                FOut = upd[0]; FOut1 = upd[1]; FOut2 = upd[2]; FOut3 = upd[3];
+            }
+        `
+            }, nca_grid);
+        }
+
+        function updateSiren() {
+            const { siren } = model;
+            const scale = params.relativeScale;
+            const [w, h] = nca_grid.size;
+            siren_grid = glsl({
+                nca_grid: nca_grid[0].linear, ...siren, scale: scale, FP: `
+            vec4 A[32/4], B[32/4];
+            vec2 sz = vec2(nca_grid_size().xy);
+            vec2 fetch_uv = UV;
+            vec2 patch_coord = (fract(UV*sz)-0.5)*2.0;
+            A[0].yx = patch_coord;
+            for (int i=0; i<${C4}; ++i) {
+                vec4 v = nca_grid(fetch_uv,i);
+                A[i].zw = v.xy; A[i+1].xy = v.zw;
+            }
+            run_layer0(A, B); run_layer1(B, A);
+            run_layer2(A, B); run_layer3(B, A);
+            FOut = A[0]; FOut1 = A[1]; FOut2 = A[2];
+        `
+            }, {
+                size: [w * scale, h * scale],
+                format: 'rgba16f', layern: S4, tag: 'siren'
+            })
+        }
+
+    </script>
+
+</body>
+
+</html>
