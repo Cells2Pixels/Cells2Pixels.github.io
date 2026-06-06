@@ -1,5 +1,5 @@
 
-export function createDemoPBR(glsl, divId) {
+export function createDemoPBR(glsl, divId, onCanvasRendered = null) {
     const root = document.getElementById(divId);
     const $ = q => root.querySelector(q);
     const $$ = q => root.querySelectorAll(q);
@@ -745,6 +745,10 @@ export function createDemoPBR(glsl, divId) {
             }
         `
         });
+
+        if (typeof onCanvasRendered === 'function') {
+            onCanvasRendered();
+        }
 
         glsl.animation_id = requestAnimationFrame(frame);
     }
