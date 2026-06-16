@@ -2,7 +2,7 @@
 // FIX Brush (click position is not correct)
 // 
 
-export function createDemo3DTexture(glsl, divId) {
+export function createDemo3DTexture(glsl, divId, onCanvasRendered = null) {
     const root = document.getElementById(divId);
     const $ = q => root.querySelector(q);
     const $$ = q => root.querySelectorAll(q);
@@ -53,6 +53,8 @@ export function createDemo3DTexture(glsl, divId) {
     const camera = {
         theta: 25.0,
         phi: 45.0,
+        // theta: 5.0,
+        // phi: 0.0,
         distance: 2.5,
         fov: 60.0,
         znear: 0.3,
@@ -737,6 +739,10 @@ export function createDemo3DTexture(glsl, divId) {
 
         `
         });
+
+        if (typeof onCanvasRendered === 'function') {
+            onCanvasRendered();
+        }
 
         glsl.animation_id = requestAnimationFrame(frame);
     }

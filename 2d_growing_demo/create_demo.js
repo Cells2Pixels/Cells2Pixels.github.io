@@ -1,5 +1,5 @@
 
-export function createDemoGrowing(glsl, divId) {
+export function createDemoGrowing(glsl, divId, onCanvasRendered = null) {
     const root = document.getElementById(divId);
     const $ = q => root.querySelector(q);
     const $$ = q => root.querySelectorAll(q);
@@ -688,6 +688,9 @@ export function createDemoGrowing(glsl, divId) {
     `
         });
 
+        if (typeof onCanvasRendered === 'function') {
+            onCanvasRendered();
+        }
 
         glsl.animation_id = requestAnimationFrame(frame);
     }
