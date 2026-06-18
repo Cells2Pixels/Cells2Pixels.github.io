@@ -13,7 +13,7 @@ export function createDemo3DTexture(glsl, divId, onCanvasRendered = null) {
     const CHN = 16, C4 = CHN / 4, D4 = 32 / 4, S4 = 1;
     const H = 128, W = 128; // Size of the NCA grid
     let nca_grid, siren_grid;
-    let models, model;
+    let model;
     const BLOCK_DIM = [64, 64, 64];
     const BLOCK_VOXELS = BLOCK_DIM[0] * BLOCK_DIM[1] * BLOCK_DIM[2];
     const GRID_HEIGHT = Math.floor(Math.sqrt(BLOCK_VOXELS));
@@ -23,9 +23,19 @@ export function createDemo3DTexture(glsl, divId, onCanvasRendered = null) {
     let IMAGE_DIM = [128, 128];
     const DEPTH_SAMPLE_DIST = 1.0 / IMAGE_DIM[0];
 
+    // Models are fetched lazily (one small file per model) and cached for the
+    // session, instead of downloading the whole combined models.json up front.
+    const modelDataCache = new Map();
+    let manifestNames = [];     // ordered model list, loaded from manifest.json
+    let selectionToken = 0; // guards against out-of-order async selections
+    // Bumped per demo instance on the shared glsl. Lets an in-flight fetch from a
+    // previous demo bail before it overwrites the (tag-keyed, now reused) GL buffers.
+    glsl.__demoGen = (glsl.__demoGen || 0) + 1;
+    const demoGen = glsl.__demoGen;
 
     const params = {
-        models_path: './3d_texture_demo/models.json',
+        models_dir: './3d_texture_demo/json_models/',
+        manifest_path: './3d_texture_demo/manifest.json',
         model: 'bubbly_0101',
         // model: 'Sci-fi_Wall_010',
         runModel: true,
@@ -363,23 +373,20 @@ export function createDemo3DTexture(glsl, divId, onCanvasRendered = null) {
 
 
     async function init() {
-        const response = await fetch(params.models_path);
-        // const response = await fetch('./growing_nca.json');
-        models = await response.json();
+        // Load the ordered model list from the manifest (curated in manifest.json).
+        try {
+            const r = await fetch(params.manifest_path);
+            if (r.ok) manifestNames = await r.json();
+        } catch (e) {
+            console.warn('3DTexture: failed to load manifest:', e);
+        }
 
         let gridBox = $('#target-shelf');
         gridBox.innerHTML = '';
         $('#origtex').innerHTML = '';
         $('#origtex').style = '';
         $('#texhinttext').innerHTML = '';
-        for (const name of target_names) {
-
-            for (const k in models[name]) {
-                const src = models[name][k];
-                src.data = new Float32Array(
-                    Uint8Array.from(atob(src.data64), c => c.charCodeAt(0)).buffer);
-                delete src.data64;
-            }
+        for (const name of manifestNames) {
 
             let media_path = "./3d_texture_demo/target_images/" + name.toLowerCase() + ".jpg"
             console.log(media_path);
@@ -392,17 +399,13 @@ export function createDemo3DTexture(glsl, divId, onCanvasRendered = null) {
             // target_img.style.backgroundSize = "100px100px";
             target_img.id = name; //html5 support arbitrary id:s
             target_img.className = 'target-square';
-            target_img.onclick = () => {
+            target_img.onclick = async () => {
                 // removeOverlayIcon();
                 currentTarget.style.borderColor = "white";
                 currentTarget = target_img;
                 target_img.style.borderColor = "rgb(245 140 44)";
                 if (!window.matchMedia('(min-width: 500px)').matches && navigator.userAgent.includes("Chrome")) {
                     target_img.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" })
-                }
-                model = load_model(name);
-                if (params.reset_upon_load) {
-                    reset();
                 }
                 $("#origtex").style.background = "url('" + media_path + "')";
                 $("#origtex").style.width = "224px";
@@ -413,6 +416,19 @@ export function createDemo3DTexture(glsl, divId, onCanvasRendered = null) {
                 // desc.href = "https://www.robots.ox.ac.uk/~vgg/data/dtd/"
                 $("#texhinttext").innerHTML = '';
                 $("#texhinttext").appendChild(desc);
+
+                const token = ++selectionToken;
+                const src = await fetchModelData(name);
+                if (token !== selectionToken || demoGen !== glsl.__demoGen) return; // superseded
+                if (!src) return;                      // fetch failed; keep last model
+                model = build_model(src);
+                if (name in bg_color)
+                    uniforms['background'] = bg_color[name];
+                else
+                    uniforms['background'] = 0.0;
+                if (params.reset_upon_load) {
+                    reset();
+                }
             };
 
 
@@ -425,7 +441,8 @@ export function createDemo3DTexture(glsl, divId, onCanvasRendered = null) {
                 gridBox.insertBefore(target_img, gridBox.lastElementChild);
             }
         }
-        model = load_model(params.model);
+        // The default thumbnail's click() (above) lazily fetches + loads the
+        // default model; frame() tolerates model being null until it arrives.
         reset();
         reset_camera();
         frame();
@@ -433,8 +450,30 @@ export function createDemo3DTexture(glsl, divId, onCanvasRendered = null) {
 
     init();
 
-    function load_model(name) {
-        const src = models[name];
+    // Fetch + decode a model's weights, caching the decoded data so re-selecting
+    // the same model never hits the network again. Returns null if unavailable.
+    async function fetchModelData(name) {
+        if (modelDataCache.has(name)) return modelDataCache.get(name);
+        try {
+            const r = await fetch(params.models_dir + encodeURIComponent(name) + '.json');
+            if (!r.ok) return null;
+            const src = await r.json();
+            for (const k in src) {
+                if (src[k].data64 !== undefined) {
+                    src[k].data = new Float32Array(
+                        Uint8Array.from(atob(src[k].data64), c => c.charCodeAt(0)).buffer);
+                    delete src[k].data64;
+                }
+            }
+            modelDataCache.set(name, src);
+            return src;
+        } catch (e) {
+            console.warn(`3DTexture: failed to load model "${name}":`, e);
+            return null;
+        }
+    }
+
+    function build_model(src) {
         // init NCA
         const [ch, ci] = src['nca.w1.weight'].shape, co = src['nca.w2.weight.T'].shape[1];
         console.assert(co == CHN)
@@ -502,10 +541,7 @@ export function createDemo3DTexture(glsl, divId, onCanvasRendered = null) {
         }
         inc.push(nca['Inc']);
         siren['Inc'] = inc.join('\n');
-        if (name in bg_color)
-            uniforms['background'] = bg_color[name];
-        else
-            uniforms['background'] = 0.0;
+        
 
         return { nca, siren };
     }
@@ -711,6 +747,12 @@ export function createDemo3DTexture(glsl, divId, onCanvasRendered = null) {
 
     function frame(time) {
         glsl.adjustCanvas();
+        // Default model may still be fetching (lazy load); keep the loop alive.
+        if (!model) {
+            glsl({ Aspect: 'fit', Clear: 0.0, FP: `FOut = vec4(0.0, 0.0, 0.0, 1.0);` });
+            glsl.animation_id = requestAnimationFrame(frame);
+            return;
+        }
         time /= 1000.0;
         if (params.runModel) {
             let step_n;
@@ -746,27 +788,5 @@ export function createDemo3DTexture(glsl, divId, onCanvasRendered = null) {
 
         glsl.animation_id = requestAnimationFrame(frame);
     }
-
-    const target_names = [
-        "banded_0037",
-        "bubbly_0101",
-        "polka-doted_0121",
-        "clouds",
-        "cobwebbed_0059",
-        "disco_fog",
-        "fire",
-        "flames",
-        "grid_0040",
-        "ink",
-        "slime",
-        "smoke",
-        "smoke_2",
-        "smoke_plume2",
-        "snow",
-        "spiralled_0112",
-        "swirly_0071",
-        "water",
-    ]
-
 
 }

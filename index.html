@@ -204,7 +204,7 @@
                     <span class="icon">
                         <i class="fas fa-laptop-code"></i>
                     </span>
-                    <span>PBR Texture Demo</span>
+                    <span>PBR Texture</span>
                 </a>
             </span>
 
@@ -223,7 +223,7 @@
                     <span class="icon">
                         <i class="fas fa-laptop-code"></i>
                     </span>
-                    <span>Growing Demo</span>
+                    <span>Growing</span>
                 </a>
             </span>
 
@@ -232,7 +232,16 @@
                     <span class="icon">
                         <i class="fas fa-laptop-code"></i>
                     </span>
-                    <span>3D Texture Demo</span>
+                    <span>3D Texture</span>
+                </a>
+            </span>
+
+            <span id="dynamic_texture_demo_button" class="link-block" style="--phase:-1.0s">
+                <a class="button is-normal is-rounded" id="call-dynamic-texture-demo">
+                    <span class="icon">
+                        <i class="fas fa-laptop-code"></i>
+                    </span>
+                    <span>Dynamic Texture (Bonus)</span>
                 </a>
             </span>
             <!-- <span class="link-block">
@@ -702,6 +711,15 @@
     import { createDemoGrowing } from './2d_growing_demo/create_demo.js';
     import { createDemoPBR } from './2d_pbr_demo/create_demo.js';
     import { createDemo3DTexture } from './3d_texture_demo/create_demo.js';
+    import { createDemoDynamicTexture } from './dynamic_texture_demo/create_demo.js';
+
+    // Snapshot the default selector markup (and the container's own inline
+    // style) so it can be restored before each demo switch. The dynamic-texture
+    // demo injects an extra (motion) shelf and overrides the container's
+    // grid-template-rows; restoring this baseline tears all of that down without
+    // needing a per-demo destructor.
+    const patternControlsBaseline = document.getElementById('pattern-controls').innerHTML;
+    const patternControlsBaselineStyle = document.getElementById('pattern-controls').getAttribute('style');
 
     const canvas = document.getElementById('demo-canvas');
     canvas.width = 1024;
@@ -746,6 +764,7 @@
         // alert(h);
         if (h === 'pbr') return 'pbr';
         if (h === '3d_texture') return '3d_texture';
+        if (h === 'dynamic_texture') return 'dynamic_texture';
         if (h === 'growing') return 'growing';
         return 'growing';
     }
@@ -754,6 +773,7 @@
         document.getElementById('pbr_texture_demo_button').classList.remove("highlight-wrap");
         document.getElementById('growing_demo_button').classList.remove("highlight-wrap");
         document.getElementById('3d_texture_demo_button').classList.remove("highlight-wrap");
+        document.getElementById('dynamic_texture_demo_button').classList.remove("highlight-wrap");
 
         if (demoName === "pbr") {
             document.getElementById('pbr_texture_demo_button').classList.add("highlight-wrap");
@@ -761,6 +781,8 @@
             document.getElementById('growing_demo_button').classList.add("highlight-wrap");
         } else if (demoName === "3d_texture") {
             document.getElementById('3d_texture_demo_button').classList.add("highlight-wrap");
+        } else if (demoName === "dynamic_texture") {
+            document.getElementById('dynamic_texture_demo_button').classList.add("highlight-wrap");
         }
     }
 
@@ -772,13 +794,29 @@
         }
         glsl.reset();
 
+        // Restore the baseline selector markup (and container style) so any
+        // per-demo DOM/style injected by the previous demo (e.g. the
+        // dynamic-texture motion shelf and its grid-row override) is removed.
+        const pc = document.getElementById('pattern-controls');
+        pc.innerHTML = patternControlsBaseline;
+        if (patternControlsBaselineStyle === null) {
+            pc.removeAttribute('style');
+        } else {
+            pc.setAttribute('style', patternControlsBaselineStyle);
+        }
+
+        // Clear any leftover zoom-button disabled state; each demo re-establishes it.
+        document.getElementById('zoomIn').classList.remove('disabled');
+        document.getElementById('zoomOut').classList.remove('disabled');
+
         if (tp === "growing") {
             createDemoGrowing(glsl, "demo", recordCanvasFrame);
         } else if (tp === "pbr") {
             createDemoPBR(glsl, "demo", recordCanvasFrame);
         } else if (tp === "3d_texture") {
             createDemo3DTexture(glsl, "demo", recordCanvasFrame);
-
+        } else if (tp === "dynamic_texture") {
+            createDemoDynamicTexture(glsl, "demo", recordCanvasFrame);
         }
         setHighlight(tp);
         demo_type = tp;
@@ -799,5 +837,9 @@
 
     document.getElementById('call-3d-texture-demo').addEventListener('click', function () {
         InitializeDemo("3d_texture");
+    });
+
+    document.getElementById('call-dynamic-texture-demo').addEventListener('click', function () {
+        InitializeDemo("dynamic_texture");
     });
 </script>

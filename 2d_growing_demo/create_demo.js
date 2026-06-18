@@ -11,13 +11,24 @@ export function createDemoGrowing(glsl, divId, onCanvasRendered = null) {
     const CHN = 32, C4 = CHN / 4, D4 = 64 / 4;
     const H = 128, W = 128; // Size of the NCA grid
     // const CHN = 16, C4 = CHN / 4, D4 = 32 / 4, S4 = 3;
-    let models, model;
+    let model;
     let nca_grid, siren_grid;
+
+    // Models are fetched lazily (one small file per model) and cached for the
+    // session, instead of downloading the whole combined models.json up front.
+    // manifestNames lists what's available (replaces iterating the combined file).
+    const modelDataCache = new Map();
+    let manifestNames = [];
+    let selectionToken = 0; // guards against out-of-order async selections
+    // Bumped per demo instance on the shared glsl. Lets an in-flight fetch from a
+    // previous demo bail before it overwrites the (tag-keyed, now reused) GL buffers.
+    glsl.__demoGen = (glsl.__demoGen || 0) + 1;
+    const demoGen = glsl.__demoGen;
 
 
     const params = {
-        models_path: './2d_growing_demo/models.json',
-        // models_path: './pbr_nca.json',
+        models_dir: './2d_growing_demo/json_models/',
+        manifest_path: './2d_growing_demo/manifest.json',
         model: 'Chameleon',
         // model: 'Sci-fi_Wall_010',
         runModel: true,
@@ -306,23 +317,20 @@ export function createDemoGrowing(glsl, divId, onCanvasRendered = null) {
 
 
     async function init() {
-        const response = await fetch(params.models_path);
-        // const response = await fetch('./growing_nca.json');
-        models = await response.json();
+        // Load only the manifest up front (tiny); model weights are fetched lazily.
+        try {
+            const r = await fetch(params.manifest_path);
+            if (r.ok) manifestNames = await r.json();
+        } catch (e) {
+            console.warn('Growing: failed to load manifest:', e);
+        }
 
         let gridBox = $('#target-shelf');
         gridBox.innerHTML = '';
         $('#origtex').innerHTML = '';
         $('#origtex').style = '';
         $('#texhinttext').innerHTML = '';
-        for (const name in models) {
-
-            for (const k in models[name]) {
-                const src = models[name][k];
-                src.data = new Float32Array(
-                    Uint8Array.from(atob(src.data64), c => c.charCodeAt(0)).buffer);
-                delete src.data64;
-            }
+        for (const name of manifestNames) {
 
             let media_path = "./2d_growing_demo/target_images/" + name.toLowerCase() + ".png"
 
@@ -332,17 +340,13 @@ export function createDemoGrowing(glsl, divId, onCanvasRendered = null) {
             // target_img.style.backgroundSize = "100px100px";
             target_img.id = name; //html5 support arbitrary id:s
             target_img.className = 'target-square';
-            target_img.onclick = () => {
+            target_img.onclick = async () => {
                 // removeOverlayIcon();
                 currentTarget.style.borderColor = "white";
                 currentTarget = target_img;
                 target_img.style.borderColor = "rgb(245 140 44)";
                 if (!window.matchMedia('(min-width: 500px)').matches && navigator.userAgent.includes("Chrome")) {
                     target_img.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" })
-                }
-                model = load_model(name);
-                if (params.reset_upon_load) {
-                    reset();
                 }
                 $("#origtex").style.background = "url('" + media_path + "')";
                 $("#origtex").style.width = "224px";
@@ -353,6 +357,15 @@ export function createDemoGrowing(glsl, divId, onCanvasRendered = null) {
                 // desc.href = "https://www.robots.ox.ac.uk/~vgg/data/dtd/"
                 $("#texhinttext").innerHTML = '';
                 $("#texhinttext").appendChild(desc);
+
+                const token = ++selectionToken;
+                const src = await fetchModelData(name);
+                if (token !== selectionToken || demoGen !== glsl.__demoGen) return; // superseded
+                if (!src) return;                      // fetch failed; keep last model
+                model = build_model(src);
+                if (params.reset_upon_load) {
+                    reset();
+                }
             };
 
 
@@ -365,19 +378,38 @@ export function createDemoGrowing(glsl, divId, onCanvasRendered = null) {
                 gridBox.insertBefore(target_img, gridBox.lastElementChild);
             }
         }
-        model = load_model(params.model);
+        // The default thumbnail's click() (above) lazily fetches + loads the
+        // default model; frame() tolerates model being null until it arrives.
         reset();
         frame();
     }
 
     init();
 
-    function load_model(name) {
-        if (params.reset_upon_load) {
-            reset();
+    // Fetch + decode a model's weights, caching the decoded data so re-selecting
+    // the same model never hits the network again. Returns null if unavailable.
+    async function fetchModelData(name) {
+        if (modelDataCache.has(name)) return modelDataCache.get(name);
+        try {
+            const r = await fetch(params.models_dir + encodeURIComponent(name) + '.json');
+            if (!r.ok) return null;
+            const src = await r.json();
+            for (const k in src) {
+                if (src[k].data64 !== undefined) {
+                    src[k].data = new Float32Array(
+                        Uint8Array.from(atob(src[k].data64), c => c.charCodeAt(0)).buffer);
+                    delete src[k].data64;
+                }
+            }
+            modelDataCache.set(name, src);
+            return src;
+        } catch (e) {
+            console.warn(`Growing: failed to load model "${name}":`, e);
+            return null;
         }
+    }
 
-        const src = models[name];
+    function build_model(src) {
         // init NCA
         const [ch, ci] = src['nca.w1.weight'].shape, co = src['nca.w2.weight.T'].shape[1];
         // alert(`Model ${name} loaded: ${ch} channels, ${ci} inputs, ${co} outputs`);
@@ -648,6 +680,12 @@ export function createDemoGrowing(glsl, divId, onCanvasRendered = null) {
 
     function frame(time) {
         glsl.adjustCanvas();
+        // Default model may still be fetching (lazy load); keep the loop alive.
+        if (!model) {
+            glsl({ Aspect: 'fit', Clear: 0.0, FP: `FOut = vec4(0.0, 0.0, 0.0, 1.0);` });
+            glsl.animation_id = requestAnimationFrame(frame);
+            return;
+        }
         time /= 1000.0;
         if (params.runModel) {
             let step_n;

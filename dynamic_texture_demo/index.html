@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cells2Pixels Dynamic Texture Demo</title>
+    <script src="../swissgl.js"></script>
+    <script src="../dat.gui.min.js"></script>
+    <style>
+        body {
+            background-color: black;
+        }
+
+        canvas {
+            width: 100vw;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+
+<script>
+    const $ = s => document.querySelector(s);
+    const canvas = $("#c");
+    const glsl = SwissGL(canvas);
+    const gui = new dat.GUI();
+
+    // PENCA: C=16 cell-state channels, LPPN/Siren width 32 (like the 2d_pbr_demo).
+    const CHN = 16, C4 = CHN / 4, D4 = 32 / 4, S4 = 1;
+    const H = 128, W = 128; // Size of the NCA grid
+    let models, model;
+    let nca_grid, siren_grid;
+
+
+    const params = {
+        models_path: './models.json',
+        model: 'fire_circular',
+        runModel: true,
+        relativeScale: 4,
+    };
+
+    let last_cursor_style = 'default';
+    let prevPos = [0, 0];
+
+    gui.add(params, 'runModel');
+    gui.add(params, 'relativeScale', 1, 8, 1).onChange(updateSiren);
+
+    function init_event_listeners() {
+        document.addEventListener('keydown', e => {
+            if (e.key === 'r') {
+                reset();
+            }
+        });
+
+        canvas.onmousedown = e => {
+            e.preventDefault();
+            if (e.buttons == 1) {
+                canvas.style.cursor = 'pointer';
+                click(getMousePos(e), e);
+            }
+        }
+        canvas.onmousemove = e => {
+            e.preventDefault();
+            if (e.buttons == 1) {
+                click(getMousePos(e), e);
+            }
+        }
+        canvas.onmouseup = e => {
+            e.preventDefault();
+            canvas.style.cursor = last_cursor_style;
+        }
+
+        canvas.addEventListener("touchmove", e => {
+            e.preventDefault();
+            for (const t of e.touches) {
+                click(getTouchPos(t), e);
+            }
+        });
+    }
+
+    function getMousePos(e) {
+        const gridX = e.offsetX / canvas.clientWidth;
+        const gridY = e.offsetY / canvas.clientHeight;
+        return [gridX, gridY];
+    }
+
+    function getTouchPos(touch) {
+        const rect = canvas.getBoundingClientRect();
+        const gridX = (touch.clientX - rect.left) / canvas.clientWidth;
+        const gridY = (touch.clientY - rect.top) / canvas.clientHeight;
+        return [gridX, gridY];
+    }
+
+    function click(pos, e) {
+        const [x, y] = pos;
+        const c = Math.min(canvas.clientWidth, canvas.clientHeight);
+        // Map mouse to the [-1, 1] domain of the (square) grid, accounting for the
+        // aspect-fit display so the brush lands under the cursor.
+        const adjustedX = (x * 2.0 - 1.0) * (canvas.clientWidth / c);
+        const adjustedY = (y * 2.0 - 1.0) * (canvas.clientHeight / c);
+        brush(adjustedX, adjustedY);
+        prevPos = pos;
+    }
+
+
+    init_event_listeners();
+
+
+    async function init() {
+        const response = await fetch(params.models_path);
+        models = await response.json();
+        for (const name in models)
+            for (const k in models[name]) {
+                const src = models[name][k];
+                src.data = new Float32Array(
+                    Uint8Array.from(atob(src.data64), c => c.charCodeAt(0)).buffer);
+                delete src.data64;
+            }
+        // Default to the first available model if the configured one is missing.
+        if (!(params.model in models)) {
+            params.model = Object.keys(models)[0];
+        }
+        gui.add(params, 'model', Object.keys(models)).onChange(name => {
+            model = load_model(name);
+            reset();
+        });
+        model = load_model(params.model);
+        reset();
+        frame();
+    }
+
+    init();
+
+    function load_model(name) {
+        const src = models[name];
+        // init NCA (PENCA): w1 has 4*C perception inputs + 2 positional-encoding inputs.
+        const [ch, ci] = src['nca.w1.weight'].shape, co = src['nca.w2.weight.T'].shape[1];
+        console.assert(co == CHN);
+        const nca = {
+            w1: glsl({}, {
+                size: [ci / 4, ch], format: 'rgba32f',
+                data: src['nca.w1.weight'].data, tag: 'w1'
+            }),
+            b1: glsl({}, {
+                size: [1, ch], format: 'r32f',
+                data: src['nca.w1.bias'].data, tag: 'b1'
+            }),
+            w2t: glsl({}, {
+                size: [co / 4, ch], format: 'rgba32f',
+                data: src['nca.w2.weight.T'].data, tag: 'w2t'
+            }),
+        };
+
+        // init Siren / LPPN (identical structure to the 2d_pbr_demo, width 32).
+        const sirenLayerN = 4;
+        const inc = [`const int C4 = ${C4}; const int D4 = 32/4;`];
+        const siren = {};
+        for (let i = 0; i < sirenLayerN; ++i) {
+            const last = i == sirenLayerN - 1;
+            const s = `lppn.net.${i}` + (last ? '' : '.linear');
+            const weight = src[s + '.weight'];
+            const bias = src[s + '.bias'];
+            const [no, ni] = weight.shape;
+            inc.push(`
+                uniform vec4 W${i}[${no * ni / 4}];
+                uniform float B${i}[${no}];
+                void run_layer${i}(in vec4 src[D4], out vec4 dst[D4]) {
+                    const int no=${no}, ni=${ni};
+                    for (int i=0; i<no; ++i) {
+                        float a = B${i}[i];
+                        #pragma unroll
+                        for (int j=0; j<ni/4; ++j) {
+                            a += dot(src[j], W${i}[i*ni/4 + j]);
+                        }
+                        dst[i/4][i%4] = ${last} ? a : sin(a*10.0);
+                    }
+                }`);
+            siren['W' + i] = weight.data;
+            siren['B' + i] = bias.data;
+        }
+        siren['Inc'] = inc.join('\n');
+        return { nca, siren };
+    }
+
+    function reset() {
+        // PENCA seed is zeros (noise_level defaults to 0). The positional encoding
+        // breaks the symmetry and drives pattern formation from the zero state.
+        nca_grid = glsl({
+            seed: 42, FP: `
+            FOut = FOut1 = FOut2 = FOut3 = vec4(0);
+        `
+        }, { size: [H, W], layern: C4, format: 'rgba16f', story: 2, tag: 'grid' });
+    }
+
+    function brush(x, y) {
+        const { nca } = model;
+        glsl({
+            ...nca, x_pos: x, y_pos: y, FP: `
+            float dist = length(XY.xy - vec2(x_pos, y_pos));
+            if (dist < 0.15) {
+                FOut = FOut1 = FOut2 = FOut3 = vec4(0.0);
+            } else {
+                discard;
+            }
+        `
+        }, nca_grid[0]);
+    }
+
+    function step() {
+        const { nca } = model;
+        glsl({
+            ...nca, seed: Math.random() * 26321, FP: `
+            const int C4 = ${C4};
+            const mat3 Kx = mat3(-1,-2,-1, 0,0,0, 1,2,1);
+            const mat3 Ky = mat3(-1,0,1, -2,0,2, -1,0,1);
+            const mat3 Klap = mat3(1,2,1, 2,-12,2, 1,2,1);
+
+            // perc holds 4*C4 perception vec4s + 1 vec4 for the (x,y) positional encoding.
+            vec4 perc[C4*4+1], upd[C4];
+
+            void neib(int x, int y) {
+                // Replicate padding: clamp neighbor coordinates to the grid bounds.
+                ivec2 p = clamp(ivec2(I.x+x-1, I.y+y-1), ivec2(0), ViewSize-1);
+                for (int i=0; i<C4; ++i) {
+                    vec4 v = Src(p,i);
+                    perc[C4+i]   += Kx[x][y]*v;
+                    perc[C4*2+i] += Ky[x][y]*v;
+                    perc[C4*3+i] += Klap[x][y]*v;
+                }
+            }
+
+            void fragment() {
+                for (int i=0; i<C4; ++i) {
+                    upd[i] = perc[i] = Src(I,i);
+                    perc[i+C4*3] = Klap[1][1]*upd[i];
+                }
+                // Positional encoding appended after the perception (2 channels), in
+                // [-1, 1] over the grid. perc[C4*4].x <- xs (rows), .y <- ys (cols).
+                perc[C4*4] = vec4(
+                    2.0 * ((float(I.y) + 0.5) / float(ViewSize.y) - 0.5),
+                    2.0 * ((float(I.x) + 0.5) / float(ViewSize.x) - 0.5),
+                    0.0, 0.0);
+
+                FOut = upd[0]; FOut1 = upd[1]; FOut2 = upd[2]; FOut3 = upd[3];
+                // Stochastic update mask (update_prob = 0.5).
+                if (hash(ivec3(I,seed)).x>0.5) return;
+                neib(0,0); neib(0,1); neib(0,2);
+                neib(1,0);            neib(1,2);
+                neib(2,0); neib(2,1); neib(2,2);
+
+                int ci = w1_size().x, ch = w1_size().y;
+                for (int h=0; h<ch; ++h) {
+                    float y = b1(ivec2(0, h)).x;
+                    for (int i=0; i<ci; ++i) {y += dot(perc[i], w1(ivec2(i, h)));}
+                    if (y<=0.0) continue;
+                    for (int i=0; i<C4; ++i) {upd[i] += y*w2t(ivec2(i, h));}
+                }
+                FOut = upd[0]; FOut1 = upd[1]; FOut2 = upd[2]; FOut3 = upd[3];
+            }
+        `
+        }, nca_grid);
+    }
+
+    function updateSiren() {
+        const { siren } = model;
+        const scale = params.relativeScale;
+        const [w, h] = nca_grid.size;
+        siren_grid = glsl({
+            nca_grid: nca_grid[0].linear, ...siren, scale: scale, FP: `
+            vec4 A[D4], B[D4];
+            vec2 sz = vec2(nca_grid_size().xy);
+            vec2 fetch_uv = UV;
+            vec2 patch_coord = (fract(UV*sz)-0.5)*2.0;
+            // Fourier positional encoding (num_frequencies = 1): sin/cos of the
+            // patch coordinate -> 4 inputs, then the 16 NCA channels (no padding).
+            A[0].yx = sin(PI * patch_coord);
+            A[0].wz = cos(PI * patch_coord);
+            for (int i=0; i<C4; ++i) {
+                A[i + 1] = nca_grid(fetch_uv, i);
+            }
+            run_layer0(A, B); run_layer1(B, A);
+            run_layer2(A, B); run_layer3(B, A);
+            FOut = A[0];
+        `
+        }, {
+            size: [w * scale, h * scale],
+            format: 'rgba16f', layern: S4, tag: 'siren'
+        })
+    }
+
+    function frame(time) {
+        glsl.adjustCanvas();
+        if (params.runModel) {
+            for (let i = 0; i < 4; ++i)
+                step();
+        }
+        updateSiren();
+        glsl({
+            siren_grid: siren_grid.linear,
+            Aspect: 'fit',
+            FP: `
+            void fragment() {
+                vec2 uv = vec2(UV.x, 1.0 - UV.y);
+                vec3 rgb = siren_grid(uv, 0).rgb;
+                FOut = vec4(rgb, 1.0);
+            }
+        `
+        });
+
+        requestAnimationFrame(frame);
+    }
+
+</script>
+
+</body>
+</html>

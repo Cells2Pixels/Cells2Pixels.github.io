@@ -12,12 +12,23 @@ export function createDemoPBR(glsl, divId, onCanvasRendered = null) {
 
     const CHN = 16, C4 = CHN / 4, D4 = 32 / 4, S4 = 3;
     const H = 128, W = 128; // Size of the NCA grid
-    let models, model;
+    let model;
     let nca_grid, siren_grid;
+
+    // Models are fetched lazily (one small file per model) and cached for the
+    // session, instead of downloading the whole combined models.json up front.
+    const modelDataCache = new Map();
+    let manifestNames = [];     // ordered model list, loaded from manifest.json
+    let selectionToken = 0; // guards against out-of-order async selections
+    // Bumped per demo instance on the shared glsl. Lets an in-flight fetch from a
+    // previous demo bail before it overwrites the (tag-keyed, now reused) GL buffers.
+    glsl.__demoGen = (glsl.__demoGen || 0) + 1;
+    const demoGen = glsl.__demoGen;
 
 
     const params = {
-        models_path: './2d_pbr_demo/models.json',
+        models_dir: './2d_pbr_demo/json_models/',
+        manifest_path: './2d_pbr_demo/manifest.json',
         // models_path: './pbr_nca.json',
         model: 'Abstract_008',
         runModel: true,
@@ -340,23 +351,20 @@ export function createDemoPBR(glsl, divId, onCanvasRendered = null) {
 
 
     async function init() {
-        const response = await fetch(params.models_path);
-        // const response = await fetch('./growing_nca.json');
-        models = await response.json();
+        // Load the ordered model list from the manifest (curated in manifest.json).
+        try {
+            const r = await fetch(params.manifest_path);
+            if (r.ok) manifestNames = await r.json();
+        } catch (e) {
+            console.warn('PBR: failed to load manifest:', e);
+        }
 
         let gridBox = $('#target-shelf');
         gridBox.innerHTML = '';
         $('#origtex').innerHTML = '';
         $('#origtex').style = '';
         $('#texhinttext').innerHTML = '';
-        for (const name of target_names) {
-
-            for (const k in models[name]) {
-                const src = models[name][k];
-                src.data = new Float32Array(
-                    Uint8Array.from(atob(src.data64), c => c.charCodeAt(0)).buffer);
-                delete src.data64;
-            }
+        for (const name of manifestNames) {
 
             let media_path = "./2d_pbr_demo/target_images/" + name + "/rendered_white.jpg"
             console.log(media_path);
@@ -371,17 +379,13 @@ export function createDemoPBR(glsl, divId, onCanvasRendered = null) {
             target_img.id = name; //html5 support arbitrary id:s
             target_img.className = 'target-square';
             target_img.style.borderColor = autocorr ? "rgb(97, 201, 23)" : "white";
-            target_img.onclick = () => {
+            target_img.onclick = async () => {
                 // removeOverlayIcon();
                 currentTarget.style.borderColor = currentTarget.id.includes(' + AutoCorr') ? "rgb(97, 201, 23)" : "white";
                 currentTarget = target_img;
                 target_img.style.borderColor = "rgb(245 140 44)";
                 if (!window.matchMedia('(min-width: 500px)').matches && navigator.userAgent.includes("Chrome")) {
                     target_img.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" })
-                }
-                model = load_model(name);
-                if (params.reset_upon_load) {
-                    reset();
                 }
                 $("#origtex").style.background = "url('" + media_path + "')";
                 $("#origtex").style.width = "224px";
@@ -392,6 +396,15 @@ export function createDemoPBR(glsl, divId, onCanvasRendered = null) {
                 // desc.href = "https://www.robots.ox.ac.uk/~vgg/data/dtd/"
                 $("#texhinttext").innerHTML = '';
                 $("#texhinttext").appendChild(desc);
+
+                const token = ++selectionToken;
+                const src = await fetchModelData(name);
+                if (token !== selectionToken || demoGen !== glsl.__demoGen) return; // superseded
+                if (!src) return;                      // fetch failed; keep last model
+                model = build_model(src);
+                if (params.reset_upon_load) {
+                    reset();
+                }
             };
 
 
@@ -404,7 +417,8 @@ export function createDemoPBR(glsl, divId, onCanvasRendered = null) {
                 gridBox.insertBefore(target_img, gridBox.lastElementChild);
             }
         }
-        model = load_model(params.model);
+        // The default thumbnail's click() (above) lazily fetches + loads the
+        // default model; frame() tolerates model being null until it arrives.
         reset();
         reset_camera();
         frame();
@@ -412,8 +426,30 @@ export function createDemoPBR(glsl, divId, onCanvasRendered = null) {
 
     init();
 
-    function load_model(name) {
-        const src = models[name];
+    // Fetch + decode a model's weights, caching the decoded data so re-selecting
+    // the same model never hits the network again. Returns null if unavailable.
+    async function fetchModelData(name) {
+        if (modelDataCache.has(name)) return modelDataCache.get(name);
+        try {
+            const r = await fetch(params.models_dir + encodeURIComponent(name) + '.json');
+            if (!r.ok) return null;
+            const src = await r.json();
+            for (const k in src) {
+                if (src[k].data64 !== undefined) {
+                    src[k].data = new Float32Array(
+                        Uint8Array.from(atob(src[k].data64), c => c.charCodeAt(0)).buffer);
+                    delete src[k].data64;
+                }
+            }
+            modelDataCache.set(name, src);
+            return src;
+        } catch (e) {
+            console.warn(`PBR: failed to load model "${name}":`, e);
+            return null;
+        }
+    }
+
+    function build_model(src) {
         // init NCA
         const [ch, ci] = src['nca.w1.weight'].shape, co = src['nca.w2.weight.T'].shape[1];
         console.assert(co == CHN)
@@ -566,6 +602,12 @@ export function createDemoPBR(glsl, divId, onCanvasRendered = null) {
 
     function frame(time) {
         glsl.adjustCanvas();
+        // Default model may still be fetching (lazy load); keep the loop alive.
+        if (!model) {
+            glsl({ Aspect: 'fit', Clear: 0.0, FP: `FOut = vec4(0.0, 0.0, 0.0, 1.0);` });
+            glsl.animation_id = requestAnimationFrame(frame);
+            return;
+        }
         time /= 1000.0;
         if (params.runModel) {
             let step_n;
@@ -752,106 +794,5 @@ export function createDemoPBR(glsl, divId, onCanvasRendered = null) {
 
         glsl.animation_id = requestAnimationFrame(frame);
     }
-
-    const target_names = [
-        "Abstract_009",
-        "Abstract_008",
-        "Sci-Fi_Padded_Fabric_004",
-        "Sci-Fi_Padded_Fabric_004 + AutoCorr",
-        "Sci-Fi_Wall_012",
-        "Sci-Fi_Wall_012 + AutoCorr",
-        "Sci-fi_Hose_005",
-        "Sci-fi_Wall_004",
-        "Sci-fi_Wall_004 + AutoCorr",
-        "Sci-fi_Wall_005",
-        "Sci-fi_Wall_005 + AutoCorr",
-        "Sci-fi_Wall_009",
-        "Sci-fi_Wall_009 + AutoCorr",
-        "Sci-fi_Wall_010",
-        "Sci-fi_Wall_010 + AutoCorr",
-        "Skin_Lizard_002",
-        "Rubber_Sole_001",
-        "Rubber_Sole_001 + AutoCorr",
-        "Rubber_Sole_003",
-        "Rubber_Sole_003 + AutoCorr",
-        "Abstract_Organic_004",
-        "Abstract_Organic_006",
-        "Bark_007",
-        "Bricks_Terracotta_002",
-        "Bricks_Terracotta_002 + AutoCorr",
-        "Bricks_Terracotta_003",
-        "Bricks_Terracotta_003 + AutoCorr",
-        "Concrete_Blocks_005",
-        "Concrete_Blocks_005 + AutoCorr",
-        "Concrete_Blocks_006",
-        "Concrete_Blocks_006 + AutoCorr",
-        "Concrete_Blocks_008",
-        "Concrete_Blocks_008 + AutoCorr",
-        "Concrete_Blocks_009",
-        "Concrete_Blocks_009 + AutoCorr",
-        "Concrete_Blocks_012",
-        "Concrete_Blocks_012 + AutoCorr",
-        "Coral_001",
-        "Coral_002",
-        "Crystal_003",
-        "Fabric_Padded_007",
-        "Fabric_Padded_Polyester_002",
-        "Fabric_Quilt_003",
-        "Fabric_Quilt_003 + AutoCorr",
-        "Glass_Stained_001",
-        "Glass_Window_004",
-        "Gravel_001",
-        "Honeycomb_002",
-        "Lava_005",
-        "Lava_006",
-        "Leather_Padded_001",
-        "Leather_weave_002",
-        "Leather_weave_002 + AutoCorr",
-        "Metal_Corrugated_010",
-        "Metal_Mesh_002",
-        "Metal_Mesh_006",
-        "Metal_Plate_Sci-fi_002",
-        "Metal_Plate_Sci-fi_002 + AutoCorr",
-        "Metal_Tiles_002",
-        "Paper_Lantern_001",
-        "Pavement_Brick_001",
-        "Pebbles_025",
-        "Pebbles_027",
-        "Plastic_Tubes_001",
-        "Pumpkin_001",
-        "Rock_031",
-        "Rocks_Hexagons_002",
-        "Roof_Tiles_Terracotta_006",
-        "Roof_Tiles_Terracotta_007",
-
-        "Stone_Path_007",
-        "Stylized_Cliff_Rock_001",
-        "Stylized_Cliff_Rock_003",
-        "Stylized_Crystal_002",
-        "Stylized_Fur_001",
-        "Stylized_Fur_002",
-        "Stylized_Grass_003",
-        "Stylized_Rocks_002",
-        "Stylized_Stone_Floor_005",
-        "Stylized_Thatched_Roof_001",
-        "Stylized_Thatched_Roof_002",
-        "Stylized_Wood_Tiles_001",
-        "Stylized_blocks_001",
-        "Stylized_blocks_001 + AutoCorr",
-        "Substance_Graph",
-        "Substance_Graph + AutoCorr",
-        "Tiles_047",
-        "Tiles_047 + AutoCorr",
-        "Waffle_001",
-        "Waffle_001 + AutoCorr",
-        "Wall_Shells_001",
-        "Wood_Acoustic_Panel_001",
-        "Wood_Acoustic_Panel_001 + AutoCorr",
-        "Wood_Ceiling_001",
-        "Wood_Ceiling_001 + AutoCorr",
-        "Wood_Chiseled_001",
-        "Wood_Panel_003",
-        "Wood_Panel_003 + AutoCorr",
-    ]
 
 }
