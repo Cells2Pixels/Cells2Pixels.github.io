@@ -65,8 +65,8 @@ export function createDemoDynamicTexture(glsl, divId, onCanvasRendered = null) {
 
     ];
 
-    const APPEARANCE_DIR = "data/images/textures_hr/"; // <name>.jpg
-    const MOTION_DIR = "data/images/motion/";          // <name>.png
+    const APPEARANCE_DIR = "dynamic_texture_demo/target_images/textures_hr/"; // <name>.jpg
+    const MOTION_DIR = "dynamic_texture_demo/target_images/motion/";          // <name>.png
 
     const params = {
         models_dir: './dynamic_texture_demo/json_models/',   // <name>.json per model
@@ -76,7 +76,7 @@ export function createDemoDynamicTexture(glsl, divId, onCanvasRendered = null) {
         runModel: true,
         relativeScale: 4,
         reset_upon_load: true,
-        speed: 2,
+        speed: 1,
     };
 
     // View transform, shared with the siren + brush shaders (spread as ...uniforms).
