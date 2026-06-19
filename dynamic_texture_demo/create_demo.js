@@ -75,7 +75,7 @@ export function createDemoDynamicTexture(glsl, divId, onCanvasRendered = null) {
         motion: 'up',
         runModel: true,
         relativeScale: 4,
-        reset_upon_load: true,
+        reset_upon_load: false,
         speed: 1,
     };
 

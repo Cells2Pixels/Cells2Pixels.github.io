@@ -33,7 +33,7 @@ export function createDemoPBR(glsl, divId, onCanvasRendered = null) {
         model: 'Abstract_008',
         runModel: true,
         relativeScale: 4,
-        reset_upon_load: true,
+        reset_upon_load: false,
         step_n: 1,
         speed: -1,
     };
